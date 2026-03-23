@@ -23,11 +23,16 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.secret_key = config.SECRET_KEY
-app.config['SESSION_TYPE'] = 'filesystem'
+app.config['SESSION_TYPE'] = config.SESSION_TYPE
 app.debug = config.DEBUG
 
 # Initialize extensions
-Session(app)
+# Wrap in try-except to prevent crash on environments where Session extension is unsupported
+try:
+    Session(app)
+except Exception as e:
+    logger.warning(f"Session initialization failed: {e}")
+
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode=config.SOCKETIO_ASYNC_MODE)
 
 # Database connection
