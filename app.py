@@ -15,16 +15,16 @@ from functools import wraps
 import logging
 import math
 
-from config import config
+from app_config import config as app_cfg
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.secret_key = config.SECRET_KEY
-app.config['SESSION_TYPE'] = config.SESSION_TYPE
-app.debug = config.DEBUG
+app.secret_key = app_cfg.SECRET_KEY
+app.config['SESSION_TYPE'] = app_cfg.SESSION_TYPE
+app.debug = app_cfg.DEBUG
 
 # Initialize extensions
 # Wrap in try-except to prevent crash on environments where Session extension is unsupported
@@ -34,7 +34,7 @@ except Exception as e:
     logger.warning(f"Session initialization failed: {e}")
 
 try:
-    socketio = SocketIO(app, cors_allowed_origins="*", async_mode=config.SOCKETIO_ASYNC_MODE)
+    socketio = SocketIO(app, cors_allowed_origins="*", async_mode=app_cfg.SOCKETIO_ASYNC_MODE)
 except Exception as e:
     logger.warning(f"SocketIO initialization failed: {e}")
     # Create a mock socketio object to prevent errors in routes
@@ -46,7 +46,7 @@ except Exception as e:
 # Database connection
 def get_db_connection():
     """Create and return a database connection"""
-    conn = sqlite3.connect(config.DATABASE_PATH)
+    conn = sqlite3.connect(app_cfg.DATABASE_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -102,7 +102,7 @@ def classify_incident(emergency_type, description=""):
     Returns severity level based on emergency type and description analysis
     """
     # Get base severity from rules
-    severity = config.SEVERITY_RULES.get(emergency_type.lower(), 'medium')
+    severity = app_cfg.SEVERITY_RULES.get(emergency_type.lower(), 'medium')
     
     # Keyword analysis for severity adjustment
     description_lower = description.lower()
@@ -145,7 +145,7 @@ def classify_incident(emergency_type, description=""):
 # Initialize Database
 def init_db():
     """Initialize database with schema"""
-    db_path = config.DATABASE_PATH
+    db_path = app_cfg.DATABASE_PATH
     db_dir = os.path.dirname(db_path)
     
     if db_dir and not os.path.exists(db_dir):
@@ -154,8 +154,8 @@ def init_db():
         except Exception as e:
             logger.warning(f"Could not create database directory {db_dir}: {e}")
 
-    if not os.path.exists(config.DATABASE_PATH):
-        logger.info(f"Creating new database at {config.DATABASE_PATH}...")
+    if not os.path.exists(app_cfg.DATABASE_PATH):
+        logger.info(f"Creating new database at {app_cfg.DATABASE_PATH}...")
         conn = get_db_connection()
         
         # Create tables
@@ -3076,4 +3076,4 @@ if __name__ == '__main__':
     logger.info("Emergency Response System starting...")
     logger.info(f"Open http://localhost:5001 in your browser")
     
-    socketio.run(app, debug=config.DEBUG, host='0.0.0.0', port=5001)
+    socketio.run(app, debug=app_cfg.DEBUG, host='0.0.0.0', port=5001)
