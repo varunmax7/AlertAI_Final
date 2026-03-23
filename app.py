@@ -4,8 +4,20 @@ Main Application File
 """
 
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash
-from flask_socketio import SocketIO, emit
-from flask_session import Session
+try:
+    from flask_socketio import SocketIO, emit
+    HAS_SOCKETIO = True
+except ImportError:
+    HAS_SOCKETIO = False
+    # Mock emit for routes that use it
+    def emit(*args, **kwargs): pass
+
+try:
+    from flask_session import Session
+    HAS_SESSION = True
+except ImportError:
+    HAS_SESSION = False
+
 import sqlite3
 import hashlib
 import json
@@ -26,22 +38,28 @@ app.secret_key = app_cfg.SECRET_KEY
 app.config['SESSION_TYPE'] = app_cfg.SESSION_TYPE
 app.debug = app_cfg.DEBUG
 
-# Initialize extensions
-# Wrap in try-except to prevent crash on environments where Session extension is unsupported
-try:
-    Session(app)
-except Exception as e:
-    logger.warning(f"Session initialization failed: {e}")
+# Initialize Session
+if HAS_SESSION:
+    try:
+        Session(app)
+    except Exception as e:
+        logger.warning(f"Session initialization failed: {e}")
 
-try:
-    socketio = SocketIO(app, cors_allowed_origins="*", async_mode=app_cfg.SOCKETIO_ASYNC_MODE)
-except Exception as e:
-    logger.warning(f"SocketIO initialization failed: {e}")
-    # Create a mock socketio object to prevent errors in routes
+# Initialize SocketIO or use mock
+if HAS_SOCKETIO:
+    try:
+        socketio = SocketIO(app, cors_allowed_origins="*", async_mode=app_cfg.SOCKETIO_ASYNC_MODE)
+    except Exception as e:
+        logger.warning(f"SocketIO initialization failed: {e}")
+        HAS_SOCKETIO = False
+
+if not HAS_SOCKETIO:
     class MockSocketIO:
         def emit(self, *args, **kwargs): pass
         def on(self, *args, **kwargs): return lambda f: f
+        def run(self, *args, **kwargs): pass
     socketio = MockSocketIO()
+
 
 # Database connection
 def get_db_connection():
