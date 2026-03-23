@@ -33,7 +33,15 @@ try:
 except Exception as e:
     logger.warning(f"Session initialization failed: {e}")
 
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode=config.SOCKETIO_ASYNC_MODE)
+try:
+    socketio = SocketIO(app, cors_allowed_origins="*", async_mode=config.SOCKETIO_ASYNC_MODE)
+except Exception as e:
+    logger.warning(f"SocketIO initialization failed: {e}")
+    # Create a mock socketio object to prevent errors in routes
+    class MockSocketIO:
+        def emit(self, *args, **kwargs): pass
+        def on(self, *args, **kwargs): return lambda f: f
+    socketio = MockSocketIO()
 
 # Database connection
 def get_db_connection():

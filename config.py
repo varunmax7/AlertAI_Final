@@ -10,15 +10,17 @@ class Config:
     if IS_VERCEL:
         SESSION_TYPE = 'null'
         DATABASE_PATH = '/tmp/emergency.db'
+        SOCKETIO_ASYNC_MODE = None  # Disable threading for Vercel lambdas
     else:
         SESSION_TYPE = 'filesystem'
         DATABASE_PATH = 'database/emergency.db'
+        SOCKETIO_ASYNC_MODE = 'threading'
     
     # Database config
     DATABASE_URL = os.environ.get('DATABASE_URL')
     
-    # Socket.IO config
-    SOCKETIO_ASYNC_MODE = 'threading'
+    # Socket.IO config - fallback for when not using IS_VERCEL logic
+    # SOCKETIO_ASYNC_MODE = 'threading'
     
     # PWA config
     PWA_NAME = 'Emergency Response System'
