@@ -3,10 +3,20 @@ import os
 class Config:
     # Flask config
     SECRET_KEY = os.environ.get('SECRET_KEY', 'emergency-system-secret-key-2024')
-    SESSION_TYPE = 'filesystem'
+    
+    # Check if running on Vercel
+    IS_VERCEL = os.environ.get('VERCEL') == '1'
+    
+    if IS_VERCEL:
+        SESSION_TYPE = 'null'  # Use standard cookie sessions on Vercel
+        DATABASE_PATH = '/tmp/emergency.db'
+    else:
+        SESSION_TYPE = 'filesystem'
+        DATABASE_PATH = 'database/emergency.db'
     
     # Database config
-    DATABASE_PATH = 'database/emergency.db'
+    # Allow override via ENV for future professional database connection
+    DATABASE_URL = os.environ.get('DATABASE_URL')
     
     # Socket.IO config
     SOCKETIO_ASYNC_MODE = 'threading'
@@ -40,7 +50,7 @@ class Config:
     POINTS_FAST_RESPONSE = 15
     
     # Debug mode
-    DEBUG = True
+    DEBUG = os.environ.get('FLASK_DEBUG', 'True') == 'True'
 
 # Use this config
 config = Config

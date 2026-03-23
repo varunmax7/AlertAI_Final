@@ -132,10 +132,17 @@ def classify_incident(emergency_type, description=""):
 # Initialize Database
 def init_db():
     """Initialize database with schema"""
+    db_path = config.DATABASE_PATH
+    db_dir = os.path.dirname(db_path)
+    
+    if db_dir and not os.path.exists(db_dir):
+        try:
+            os.makedirs(db_dir, exist_ok=True)
+        except Exception as e:
+            logger.warning(f"Could not create database directory {db_dir}: {e}")
+
     if not os.path.exists(config.DATABASE_PATH):
-        logger.info("Creating new database...")
-        os.makedirs('database', exist_ok=True)
-        
+        logger.info(f"Creating new database at {config.DATABASE_PATH}...")
         conn = get_db_connection()
         
         # Create tables
@@ -338,6 +345,9 @@ def init_db():
         logger.info("Database initialized successfully!")
     else:
         logger.info("Database already exists.")
+
+# Ensure database is initialized (especially for serverless/Vercel)
+init_db()
 
 # ==================== ROUTES ====================
 
