@@ -351,8 +351,18 @@ def init_db():
     else:
         logger.info("Database already exists.")
 
-# Ensure database is initialized (especially for serverless/Vercel)
-init_db()
+# Lazy initialization flag
+_db_initialized = False
+
+@app.before_request
+def ensure_db_initialized():
+    global _db_initialized
+    if not _db_initialized:
+        try:
+            init_db()
+            _db_initialized = True
+        except Exception as e:
+            logger.error(f"Lazy init_db failed: {e}")
 
 # ==================== ROUTES ====================
 
