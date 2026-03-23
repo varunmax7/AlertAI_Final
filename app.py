@@ -60,6 +60,26 @@ if not HAS_SOCKETIO:
         def run(self, *args, **kwargs): pass
     socketio = MockSocketIO()
 
+# Global error handler to show real errors instead of generic 500
+import traceback as tb_module
+
+@app.errorhandler(500)
+def handle_500(e):
+    error_trace = tb_module.format_exc()
+    return f"""<html><body style="font-family:monospace;padding:40px;background:#111;color:#fff;">
+    <h1 style="color:#ff4444;">Runtime Error</h1>
+    <pre style="background:#222;padding:20px;color:#ffaa00;white-space:pre-wrap;">{error_trace}</pre>
+    <p style="color:#888;">Original: {e}</p>
+    </body></html>""", 500
+
+@app.errorhandler(Exception)
+def handle_exception(e):
+    error_trace = tb_module.format_exc()
+    return f"""<html><body style="font-family:monospace;padding:40px;background:#111;color:#fff;">
+    <h1 style="color:#ff4444;">Unhandled Exception</h1>
+    <pre style="background:#222;padding:20px;color:#ffaa00;white-space:pre-wrap;">{error_trace}</pre>
+    <p style="color:#888;">Error: {e}</p>
+    </body></html>""", 500
 
 # Database connection
 def get_db_connection():
