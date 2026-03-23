@@ -36,15 +36,17 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY') or 'emergency-system-secret-key-2024-fallback'
 app.config['SECRET_KEY'] = app.secret_key
-app.config['SESSION_TYPE'] = app_cfg.SESSION_TYPE
 app.debug = app_cfg.DEBUG
 
-# Initialize Session
-if HAS_SESSION:
+# Initialize Session - only use Flask-Session for local development
+# On Vercel, Flask's built-in cookie sessions work fine
+if HAS_SESSION and not app_cfg.IS_VERCEL:
     try:
+        app.config['SESSION_TYPE'] = 'filesystem'
         Session(app)
     except Exception as e:
         logger.warning(f"Session initialization failed: {e}")
+
 
 # Initialize SocketIO or use mock
 if HAS_SOCKETIO:
