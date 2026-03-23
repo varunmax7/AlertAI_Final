@@ -74,7 +74,7 @@
                             <small class="text-muted">Score</small>
                         </div>
                         <div class="col-4">
-                            <div class="h5 text-info">{{ responder.availability ? 'Yes' : 'No' }}</div>
+                            <div class="h5 text-info">{{ 'Yes' if responder.availability else 'No' }}</div>
                             <small class="text-muted">Available</small>
                         </div>
                     </div>
@@ -145,7 +145,10 @@
         <div class="col-md-3">
             <div class="card">
                 <div class="card-body text-center">
-                    <div class="h2 text-info">{{ responders|map(attribute='response_score')|sum // max(responders|length, 1) }}</div>
+                    <div class="h2 text-info">
+                        {% set count = responders|length %}
+                        {{ (responders|map(attribute='response_score')|sum // count) if count > 0 else 0 }}
+                    </div>
                     <small class="text-muted">Average Score</small>
                 </div>
             </div>
