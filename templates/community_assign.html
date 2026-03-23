@@ -1,0 +1,570 @@
+{% extends "base.html" %}
+
+{% block title %}Assign Community Helpers - Emergency Response{% endblock %}
+
+{% block styles %}
+<style>
+    .user-marker {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: white;
+        border: 3px solid #17a2b8;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    }
+
+    .user-marker.selected {
+        border-color: #28a745;
+        background: #e6ffe6;
+    }
+
+    .distance-badge {
+        position: absolute;
+        top: -5px;
+        right: -5px;
+        background: #dc3545;
+        color: white;
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        font-size: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .user-card {
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .user-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    }
+
+    .user-card.selected {
+        border-color: #28a745;
+        background: rgba(40, 167, 69, 0.05);
+    }
+
+    .skill-tag {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        margin-right: 5px;
+        margin-bottom: 5px;
+    }
+
+    .skill-medical {
+        background: #ffe6e6;
+        color: #dc3545;
+    }
+
+    .skill-fire {
+        background: #fff3e6;
+        color: #fd7e14;
+    }
+
+    .skill-rescue {
+        background: #e6f7ff;
+        color: #17a2b8;
+    }
+
+    .skill-first-aid {
+        background: #e6ffe6;
+        color: #28a745;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">
+                <i class="fas fa-users"></i> Assign Community Helpers
+            </h1>
+            <p class="text-muted">Assign nearby verified users to assist with emergency #{{ incident.id }}</p>
+        </div>
+        <div>
+            <a href="{{ url_for('incident_details', incident_id=incident.id) }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Incident
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Left Panel: Incident Info -->
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h6 class="mb-0">
+                        <i class="fas fa-exclamation-triangle"></i> Emergency Details
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <tr>
+                            <th>ID:</th>
+                            <td>#{{ incident.id }}</td>
+                        </tr>
+                        <tr>
+                            <th>Type:</th>
+                            <td>
+                                <span class="badge bg-primary">{{ incident.emergency_type|title }}</span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Severity:</th>
+                            <td>
+                                <span
+                                    class="badge bg-{% if incident.severity == 'critical' %}danger{% elif incident.severity == 'high' %}warning{% elif incident.severity == 'medium' %}info{% else %}success{% endif %}">
+                                    {{ incident.severity|title }}
+                                </span>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Location:</th>
+                            <td>
+                                <small>
+                                    <i class="fas fa-map-marker-alt"></i>
+                                    {{ "%.6f, %.6f"|format(incident.latitude, incident.longitude) }}
+                                </small>
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Description:</th>
+                            <td><small>{{ incident.description|truncate(100) if incident.description else 'No
+                                    description' }}</small></td>
+                        </tr>
+                    </table>
+
+                    <div class="alert alert-warning">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>No responders available</strong> within {{ radius }}km. Community helpers will be
+                        requested.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Selected Helpers -->
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h6 class="mb-0">
+                        <i class="fas fa-user-check"></i> Selected Helpers
+                        <span class="badge bg-light text-dark float-end" id="selectedCount">0</span>
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div id="selectedHelpersList" class="mb-3">
+                        <div class="text-center text-muted py-3">
+                            <i class="fas fa-user-plus fa-2x mb-2"></i>
+                            <p>No helpers selected yet</p>
+                            <small>Click on users in the map or list to select them</small>
+                        </div>
+                    </div>
+
+                    <form id="assignForm">
+                        <input type="hidden" name="incident_id" value="{{ incident.id }}">
+                        <input type="hidden" id="selectedUsers" name="selected_users">
+
+                        <div class="mb-3">
+                            <label class="form-label">Instructions for Helpers</label>
+                            <textarea class="form-control" name="instructions" rows="3"
+                                placeholder="Provide specific instructions for the helpers..."></textarea>
+                            <small class="text-muted">What should they do when they arrive?</small>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="button" class="btn btn-success" onclick="sendHelpRequests()" id="assignBtn"
+                                disabled>
+                                <i class="fas fa-paper-plane"></i> Send Help Requests
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="cancelAssignment()">
+                                <i class="fas fa-times"></i> Cancel
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Map & User List -->
+        <div class="col-md-8">
+            <!-- Map -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0">
+                            <i class="fas fa-map-marked-alt"></i> Nearby Verified Users
+                        </h6>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button type="button" class="btn btn-outline-primary" onclick="refreshMap()">
+                                <i class="fas fa-sync-alt"></i> Refresh
+                            </button>
+                            <button type="button" class="btn btn-outline-info" onclick="fitMapToBounds()">
+                                <i class="fas fa-expand"></i> Fit All
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="assignmentMap" style="height: 400px; width: 100%;"></div>
+                    <div class="mt-3 text-center">
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle"></i> Click user markers to select them. Showing users within
+                            {{ radius }}km.
+                        </small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- User List -->
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-list"></i> Available Users
+                        <span class="badge bg-primary float-end">{{ nearby_users|length }}</span>
+                    </h6>
+                </div>
+                <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                    {% if nearby_users %}
+                    <div class="row g-3" id="usersGrid">
+                        {% for user in nearby_users %}
+                        <div class="col-md-6">
+                            <div class="card user-card" data-user-id="{{ user.id }}"
+                                onclick="selectUser({{ user.id }})">
+                                <div class="card-body">
+                                    <div class="d-flex align-items-start">
+                                        <div class="flex-shrink-0">
+                                            <div class="user-marker" id="marker-{{ user.id }}">
+                                                {{ user.name[0]|upper }}
+                                            </div>
+                                        </div>
+                                        <div class="flex-grow-1 ms-3">
+                                            <h6 class="mb-1">{{ user.name }}</h6>
+                                            <p class="text-muted small mb-2">
+                                                <i class="fas fa-map-marker-alt"></i> {{ user.distance }}km away
+                                            </p>
+                                            <p class="mb-2">
+                                                <span class="badge bg-info">Helps: {{ user.help_count }}</span>
+                                                <span class="badge bg-success ms-1">Points: {{ user.points }}</span>
+                                            </p>
+                                            {% if user.skills %}
+                                            <div class="mb-2">
+                                                {% for skill in user.skills.split(',') %}
+                                                <span class="skill-tag skill-{{ skill.strip() }}">{{ skill.strip()|title
+                                                    }}</span>
+                                                {% endfor %}
+                                            </div>
+                                            {% endif %}
+                                        </div>
+                                        <div class="flex-shrink-0">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="check-{{ user.id }}"
+                                                    onchange="toggleUserSelection({{ user.id }}, this.checked)">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-user-slash fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">No nearby users available</h5>
+                        <p class="text-muted">No verified users found within {{ radius }}km radius</p>
+                        <button class="btn btn-outline-primary" onclick="refreshMap()">
+                            <i class="fas fa-sync-alt"></i> Search Again
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Global variables
+    let map = null;
+    let userMarkers = {};
+    let selectedUsers = new Set();
+    let incidentLocation = [{{ incident.latitude }}, { { incident.longitude } }];
+
+    // Initialize map
+    function initMap() {
+        if (!map) {
+            map = L.map('assignmentMap').setView(incidentLocation, 14);
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+
+            // Add incident marker
+            const incidentIcon = L.divIcon({
+                className: 'incident-marker {{ incident.severity }}',
+                html: '<div class="marker-pin {{ incident.severity }}"></div><span class="marker-text">!</span>',
+                iconSize: [30, 42],
+                iconAnchor: [15, 42]
+            });
+
+            L.marker(incidentLocation, { icon: incidentIcon })
+                .addTo(map)
+                .bindPopup('<strong>Emergency #{{ incident.id }}</strong><br>{{ incident.emergency_type|title }}')
+                .openPopup();
+
+            // Add user markers
+            {% for user in nearby_users %}
+            addUserMarker({{ user.id | tojson }}, { { user.latitude } }, { { user.longitude } }, { { user.name | tojson } }, { { user.distance } });
+        {% endfor %}
+
+        console.log('Map initialized with {{ nearby_users|length }} users');
+    }
+    }
+
+    // Add user marker to map
+    function addUserMarker(userId, lat, lng, name, distance) {
+        const marker = L.marker([lat, lng], {
+            icon: L.divIcon({
+                className: 'user-marker',
+                html: `<div class="user-marker">${name[0].toUpperCase()}</div>`,
+                iconSize: [40, 40],
+                iconAnchor: [20, 40]
+            })
+        })
+            .addTo(map)
+            .bindPopup(`
+            <strong>${name}</strong><br>
+            Distance: ${distance}km<br>
+            <button class="btn btn-sm btn-primary mt-2" onclick="selectUser(${userId})">
+                Select for Help
+            </button>
+        `);
+
+        userMarkers[userId] = marker;
+
+        // Add click handler
+        marker.on('click', function () {
+            selectUser(userId);
+        });
+    }
+
+    // Select a user
+    function selectUser(userId) {
+        const isSelected = selectedUsers.has(userId);
+
+        if (isSelected) {
+            // Deselect
+            selectedUsers.delete(userId);
+            document.getElementById(`marker-${userId}`).classList.remove('selected');
+            document.getElementById(`check-${userId}`).checked = false;
+            document.querySelector(`.user-card[data-user-id="${userId}"]`).classList.remove('selected');
+        } else {
+            // Select
+            selectedUsers.add(userId);
+            document.getElementById(`marker-${userId}`).classList.add('selected');
+            document.getElementById(`check-${userId}`).checked = true;
+            document.querySelector(`.user-card[data-user-id="${userId}"]`).classList.add('selected');
+        }
+
+        updateSelectedHelpersList();
+        updateAssignButton();
+    }
+
+    // Toggle user selection from checkbox
+    function toggleUserSelection(userId, isChecked) {
+        if (isChecked) {
+            selectedUsers.add(userId);
+        } else {
+            selectedUsers.delete(userId);
+        }
+
+        // Update UI
+        const marker = document.getElementById(`marker-${userId}`);
+        const card = document.querySelector(`.user-card[data-user-id="${userId}"]`);
+
+        if (isChecked) {
+            marker.classList.add('selected');
+            card.classList.add('selected');
+        } else {
+            marker.classList.remove('selected');
+            card.classList.remove('selected');
+        }
+
+        updateSelectedHelpersList();
+        updateAssignButton();
+    }
+
+    // Update selected helpers list
+    function updateSelectedHelpersList() {
+        const container = document.getElementById('selectedHelpersList');
+        const count = document.getElementById('selectedCount');
+        const selectedInput = document.getElementById('selectedUsers');
+
+        count.textContent = selectedUsers.size;
+
+        if (selectedUsers.size === 0) {
+            container.innerHTML = `
+                <div class="text-center text-muted py-3">
+                    <i class="fas fa-user-plus fa-2x mb-2"></i>
+                    <p>No helpers selected yet</p>
+                    <small>Click on users in the map or list to select them</small>
+                </div>
+            `;
+        } else {
+            let html = '<div class="list-group">';
+
+            // Get selected user data from the page
+            selectedUsers.forEach(userId => {
+                const userCard = document.querySelector(`.user-card[data-user-id="${userId}"]`);
+                if (userCard) {
+                    const userName = userCard.querySelector('h6').textContent;
+                    const userDistance = userCard.querySelector('.text-muted small').textContent;
+
+                    html += `
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <strong>${userName}</strong>
+                                    <br>
+                                    <small class="text-muted">${userDistance}</small>
+                                </div>
+                                <button class="btn btn-sm btn-outline-danger" onclick="selectUser(${userId})">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        // Update hidden input
+        selectedInput.value = Array.from(selectedUsers).join(',');
+    }
+
+    // Update assign button state
+    function updateAssignButton() {
+        const assignBtn = document.getElementById('assignBtn');
+        assignBtn.disabled = selectedUsers.size === 0;
+    }
+
+    // Send help requests
+    function sendHelpRequests() {
+        const form = document.getElementById('assignForm');
+        const formData = new FormData(form);
+
+        if (selectedUsers.size === 0) {
+            showNotification('Please select at least one helper', 'warning');
+            return;
+        }
+
+        // Disable button and show loading
+        const assignBtn = document.getElementById('assignBtn');
+        const originalText = assignBtn.innerHTML;
+        assignBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+        assignBtn.disabled = true;
+
+        fetch('/api/assign_community_helpers', {
+            method: 'POST',
+            body: JSON.stringify(Object.fromEntries(formData)),
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('Help requests sent successfully!', 'success');
+
+                    // Redirect back to incident page after 2 seconds
+                    setTimeout(() => {
+                        window.location.href = `/admin/incident/${data.incident_id}`;
+                    }, 2000);
+                } else {
+                    showNotification('Error: ' + data.error, 'danger');
+                    assignBtn.innerHTML = originalText;
+                    assignBtn.disabled = false;
+                }
+            })
+            .catch(error => {
+                showNotification('Network error. Please try again.', 'danger');
+                assignBtn.innerHTML = originalText;
+                assignBtn.disabled = false;
+            });
+    }
+
+    // Utility functions
+    function refreshMap() {
+        location.reload();
+    }
+
+    function fitMapToBounds() {
+        const markers = Object.values(userMarkers);
+        if (markers.length > 0) {
+            const group = new L.featureGroup(markers);
+            map.fitBounds(group.getBounds().pad(0.1));
+        }
+    }
+
+    function cancelAssignment() {
+        if (confirm('Cancel community helper assignment?')) {
+            window.location.href = `/admin/incident/{{ incident.id }}`;
+        }
+    }
+
+    function showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+        notification.style.cssText = `
+            top: 70px;
+            right: 20px;
+            z-index: 9999;
+            min-width: 300px;
+            max-width: 400px;
+        `;
+        notification.innerHTML = `
+            <strong>${type.charAt(0).toUpperCase() + type.slice(1)}!</strong> ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+
+        document.body.appendChild(notification);
+
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.remove();
+            }
+        }, 5000);
+    }
+
+    // Initialize on page load
+    function setupAssignmentMap() {
+        try {
+            initMap();
+        } catch (e) {
+            console.error('Error initializing assignment map:', e);
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', setupAssignmentMap);
+    } else {
+        setupAssignmentMap();
+    }
+</script>
+{% endblock %}

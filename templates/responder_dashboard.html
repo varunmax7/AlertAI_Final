@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Responder Dashboard - Emergency Response</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-primary: #0f0f23;
+            --bg-secondary: #1a1a2e;
+            --bg-card: #16213e;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a0a0;           
+            --accent-blue: #4361ee;
+            --accent-green: #06d6a0;
+            --accent-red: #ef476f;
+            --accent-orange: #ff9f1c;
+        }
+
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            min-height: 100vh;
+        }
+
+        .navbar {
+            background: var(--bg-secondary) !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+        }
+
+        .card-header {
+            background: transparent;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-secondary) 100%);
+            border-radius: 16px;
+            padding: 1.5rem;
+            text-align: center;
+        }
+
+        .stat-card.available {
+            border-left: 4px solid var(--accent-green);
+        }
+
+        .stat-card.busy {
+            border-left: 4px solid var(--accent-orange);
+        }
+
+        .stat-card .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        .incident-card {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-left: 4px solid var(--accent-blue);
+            transition: all 0.3s ease;
+        }
+
+        .incident-card:hover {
+            transform: translateX(5px);
+        }
+
+        .incident-card.critical {
+            border-left-color: var(--accent-red);
+        }
+
+        .incident-card.high {
+            border-left-color: var(--accent-orange);
+        }
+
+        .badge-severity {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+        }
+
+        .badge-critical {
+            background: var(--accent-red);
+        }
+
+        .badge-high {
+            background: var(--accent-orange);
+        }
+
+        .badge-medium {
+            background: var(--accent-blue);
+        }
+
+        .badge-low {
+            background: var(--accent-green);
+        }
+
+        .btn-respond {
+            background: linear-gradient(135deg, var(--accent-blue) 0%, #3a0ca3 100%);
+            border: none;
+            border-radius: 8px;
+            padding: 0.5rem 1.5rem;
+        }
+
+        .status-toggle {
+            width: 100%;
+            padding: 1rem;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        .status-available {
+            background: linear-gradient(135deg, var(--accent-green) 0%, #059669 100%);
+            border: none;
+        }
+
+        .status-busy {
+            background: linear-gradient(135deg, var(--accent-orange) 0%, #d97706 100%);
+            border: none;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-ambulance me-2"></i>
+                Responder Dashboard
+            </a>
+            <div class="d-flex align-items-center">
+                <span class="text-light me-3">
+                    <i class="fas fa-user-shield me-1"></i>
+                    {{ responder.name if responder else 'Responder' }} ({{ responder.role if responder else 'N/A' }})
+                </span>
+                <a href="{{ url_for('logout') }}" class="btn btn-outline-light btn-sm">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container py-4">
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <!-- Status & Stats Row -->
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="stat-card {{ 'available' if responder and responder.availability else 'busy' }}">
+                    <div class="mb-3">
+                        <i
+                            class="fas fa-circle {{ 'text-success' if responder and responder.availability else 'text-warning' }} fa-2x"></i>
+                    </div>
+                    <h5>Current Status</h5>
+                    <p class="stat-value">{{ 'AVAILABLE' if responder and responder.availability else 'BUSY' }}</p>
+                    <button
+                        class="btn status-toggle {{ 'status-busy' if responder and responder.availability else 'status-available' }}"
+                        onclick="toggleStatus()">
+                        {{ 'Go Busy' if responder and responder.availability else 'Go Available' }}
+                    </button>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="stat-card">
+                    <i class="fas fa-tasks fa-2x mb-3 text-info"></i>
+                    <h5>Assigned Incidents</h5>
+                    <p class="stat-value text-info">{{ assigned_incidents|length if assigned_incidents else 0 }}</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="stat-card">
+                    <i class="fas fa-star fa-2x mb-3 text-warning"></i>
+                    <h5>Response Score</h5>
+                    <p class="stat-value text-warning">{{ responder.response_score if responder else 0 }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Active Incidents -->
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="fas fa-exclamation-triangle text-warning me-2"></i>Active Incidents
+                        </h5>
+                        <span class="badge bg-danger">{{ active_incidents|length if active_incidents else 0 }}</span>
+                    </div>
+                    <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                        {% if active_incidents %}
+                        {% for incident in active_incidents %}
+                        <div class="incident-card {{ incident.severity }}">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h6 class="mb-0">{{ incident.emergency_type|title }}</h6>
+                                <span class="badge-severity badge-{{ incident.severity }}">{{ incident.severity
+                                    }}</span>
+                            </div>
+                            <p class="text-secondary small mb-2">
+                                <i class="fas fa-user me-1"></i>{{ incident.user_name }}
+                            </p>
+                            <p class="text-secondary small mb-2">
+                                <i class="fas fa-clock me-1"></i>{{ incident.created_at }}
+                            </p>
+                            <button class="btn btn-respond btn-sm" onclick="respondToIncident({{ incident.id }})">
+                                <i class="fas fa-bolt me-1"></i>Respond
+                            </button>
+                        </div>
+                        {% endfor %}
+                        {% else %}
+                        <div class="text-center text-secondary py-4">
+                            <i class="fas fa-check-circle fa-3x mb-3"></i>
+                            <p>No active incidents</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-clipboard-list text-info me-2"></i>My Assignments</h5>
+                    </div>
+                    <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                        {% if assigned_incidents %}
+                        {% for incident in assigned_incidents %}
+                        <div class="incident-card {{ incident.severity }}">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h6 class="mb-0">{{ incident.emergency_type|title }}</h6>
+                                <span class="badge-severity badge-{{ incident.severity }}">{{ incident.severity
+                                    }}</span>
+                            </div>
+                            <p class="text-secondary small mb-1">
+                                <i class="fas fa-user me-1"></i>{{ incident.user_name }}
+                            </p>
+                            <p class="text-secondary small mb-2">
+                                <i class="fas fa-phone me-1"></i>{{ incident.user_phone }}
+                            </p>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-success btn-sm" onclick="markResolved({{ incident.id }})">
+                                    <i class="fas fa-check"></i> Resolved
+                                </button>
+                                <button class="btn btn-outline-light btn-sm" onclick="viewDetails({{ incident.id }})">
+                                    <i class="fas fa-info-circle"></i> Details
+                                </button>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        {% else %}
+                        <div class="text-center text-secondary py-4">
+                            <i class="fas fa-inbox fa-3x mb-3"></i>
+                            <p>No assigned incidents</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function toggleStatus() {
+            alert('Status toggle - Feature coming soon!');
+        }
+
+        function respondToIncident(id) {
+            if (confirm('Accept this incident?')) {
+                alert('Responding to incident #' + id);
+            }
+        }
+
+        function markResolved(id) {
+            if (confirm('Mark this incident as resolved?')) {
+                alert('Incident #' + id + ' marked as resolved');
+                location.reload();
+            }
+        }
+
+        function viewDetails(id) {
+            alert('View details for incident #' + id);
+        }
+    </script>
+</body>
+
+</html>

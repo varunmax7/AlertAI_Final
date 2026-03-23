@@ -1,0 +1,1458 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard - Emergency Response{% endblock %}
+
+{% block styles %}
+<style>
+    /* Map marker styles */
+    .incident-marker .marker-pin {
+        width: 30px;
+        height: 30px;
+        border-radius: 50% 50% 50% 0;
+        position: absolute;
+        transform: rotate(-45deg);
+        left: 50%;
+        top: 50%;
+        margin: -15px 0 0 -15px;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    }
+
+    .incident-marker .marker-text {
+        position: absolute;
+        top: 2px;
+        left: 0;
+        width: 100%;
+        text-align: center;
+        color: white;
+        font-weight: bold;
+        font-size: 14px;
+        transform: rotate(45deg);
+    }
+
+    .incident-marker.critical .marker-pin {
+        background: #dc3545;
+        border: 2px solid #ff6b7a;
+    }
+
+    .incident-marker.high .marker-pin {
+        background: #fd7e14;
+        border: 2px solid #ffa94d;
+    }
+
+    .incident-marker.medium .marker-pin {
+        background: #ffc107;
+        border: 2px solid #ffd54f;
+    }
+
+    .incident-marker.low .marker-pin {
+        background: #28a745;
+        border: 2px solid #51cf66;
+    }
+
+    .incident-marker.resolved .marker-pin {
+        background: #6c757d;
+        border: 2px solid #adb5bd;
+    }
+
+    /* Responder markers */
+    .responder-marker .marker-pin {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: white;
+        border: 3px solid #007bff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    }
+
+    .responder-marker.ambulance .marker-pin {
+        border-color: #dc3545;
+        background: #ffe6e6;
+    }
+
+    .responder-marker.police .marker-pin {
+        border-color: #0d6efd;
+        background: #e7f1ff;
+    }
+
+    .responder-marker.fire .marker-pin {
+        border-color: #fd7e14;
+        background: #fff3e6;
+    }
+
+    /* Map controls */
+    .leaflet-control-layers {
+        border-radius: 5px;
+        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.4);
+    }
+
+    .leaflet-popup-content {
+        min-width: 200px;
+    }
+
+    .incident-popup,
+    .responder-popup {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    .incident-popup h6,
+    .responder-popup h6 {
+        font-size: 1rem;
+    }
+
+    .map-legend {
+        background: white;
+        padding: 10px;
+        border-radius: 5px;
+        box-shadow: 0 1px 5px rgba(0, 0, 0, 0.2);
+        z-index: 10;
+    }
+
+    /* Ensure Leaflet controls are visible */
+    .leaflet-control {
+        z-index: 999 !important;
+    }
+
+    .leaflet-control-layers {
+        z-index: 1000 !important;
+    }
+
+    .legend-item {
+        display: flex;
+        align-items: center;
+        margin-bottom: 5px;
+    }
+
+    .legend-color {
+        width: 20px;
+        height: 20px;
+        border-radius: 3px;
+        margin-right: 8px;
+    }
+
+    .legend-critical {
+        background-color: #dc3545;
+    }
+
+    .legend-high {
+        background-color: #fd7e14;
+    }
+
+    .legend-medium {
+        background-color: #ffc107;
+    }
+
+    .legend-low {
+        background-color: #28a745;
+    }
+
+    .legend-resolved {
+        background-color: #6c757d;
+    }
+
+    /* Pulse animation for active incidents */
+    @keyframes pulse {
+        0% {
+            transform: scale(1);
+            opacity: 1;
+        }
+
+        50% {
+            transform: scale(1.1);
+            opacity: 0.8;
+        }
+
+        100% {
+            transform: scale(1);
+            opacity: 1;
+        }
+    }
+
+    .pulse-marker {
+        animation: pulse 2s infinite;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">
+                <i class="fas fa-tachometer-alt"></i> Admin Dashboard
+            </h1>
+            <p class="text-muted">Real-time emergency monitoring and management</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-primary" onclick="refreshData()">
+                <i class="fas fa-sync-alt"></i> Refresh
+            </button>
+            <button class="btn btn-danger emergency-btn" onclick="showEmergencyModal()">
+                <i class="fas fa-plus"></i> Quick Emergency
+            </button>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row">
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card stat-card stat-critical">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-danger text-uppercase mb-1">
+                                Active Emergencies
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="active-incidents-count">
+                                {{ active_incidents }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-exclamation-triangle fa-2x text-danger"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card stat-card stat-high">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                Total Incidents
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="total-incidents-count">
+                                {{ total_incidents }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-list-alt fa-2x text-warning"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card stat-card stat-medium">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                Verified Users
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="verified-users-count">
+                                {{ total_users }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-users fa-2x text-info"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-4">
+            <div class="card stat-card stat-low">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                Available Responders
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="available-responders-count">
+                                {{ available_responders }}
+                            </div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-ambulance fa-2x text-success"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pending Verifications Alert -->
+    {% if total_pending and total_pending > 0 %}
+    <div class="alert alert-warning alert-dismissible fade show">
+        <i class="fas fa-exclamation-circle"></i>
+        <strong>{{ total_pending }} user(s)</strong> are waiting for verification.
+        <a href="#" class="alert-link">Review now</a>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
+
+    <!-- Live Emergency Map -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-map-marker-alt"></i> Live Emergency Map
+                        </h6>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button type="button" class="btn btn-outline-primary" onclick="refreshMap()">
+                                <i class="fas fa-sync-alt"></i> Refresh
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="fitMapToBounds()">
+                                <i class="fas fa-expand"></i> Fit All
+                            </button>
+                            <button type="button" class="btn btn-outline-info" onclick="toggleResponders()"
+                                id="toggleRespondersBtn">
+                                <i class="fas fa-ambulance"></i> Show Responders
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body" style="padding: 0;">
+                    <div id="map"
+                        style="height: 500px; width: 100%; background-color: #e9ecef; border: 1px solid #dee2e6; border-radius: 4px; display: block; position: relative; overflow: hidden;">
+                    </div>
+                    <div class="mt-3 d-flex justify-content-between align-items-center" style="padding: 15px;">
+                        <div class="map-legend">
+                            <div class="legend-item">
+                                <div class="legend-color legend-critical"></div>
+                                <small>Critical</small>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color legend-high"></div>
+                                <small>High</small>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color legend-medium"></div>
+                                <small>Medium</small>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color legend-low"></div>
+                                <small>Low</small>
+                            </div>
+                            <div class="legend-item">
+                                <div class="legend-color legend-resolved"></div>
+                                <small>Resolved</small>
+                            </div>
+                        </div>
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle"></i> Click markers for details. Real-time updates enabled.
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Incidents & Pending Users -->
+    <div class="row">
+        <!-- Recent Incidents -->
+        <div class="col-lg-8 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-exclamation-triangle"></i> Recent Emergencies
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Type</th>
+                                    <th>Severity</th>
+                                    <th>Status</th>
+                                    <th>Reported By</th>
+                                    <th>Time</th>
+                                    <th>Location</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for incident in recent_incidents %}
+                                <tr>
+                                    <td>#{{ incident.id }}</td>
+                                    <td>
+                                        <i
+                                            class="fas fa-{% if incident.emergency_type == 'medical' %}heartbeat{% elif incident.emergency_type == 'fire' %}fire{% elif incident.emergency_type == 'crime' %}shield-alt{% else %}car-crash{% endif %}"></i>
+                                        {{ incident.emergency_type|title }}
+                                    </td>
+                                    <td>
+                                        <span class="severity-{{ incident.severity }}">
+                                            <i class="fas fa-circle"></i> {{ incident.severity|title }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge-status status-{{ incident.status }}">
+                                            {{ incident.status|title }}
+                                        </span>
+                                    </td>
+                                    <td>{{ incident.user_name }}</td>
+                                    <td>{{ incident.created_at[:16] }}</td>
+                                    <td>
+                                        <small>
+                                            <i class="fas fa-map-marker-alt"></i>
+                                            {{ "%.4f, %.4f"|format(incident.latitude, incident.longitude) }}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm" role="group">
+                                            <button class="btn btn-outline-primary"
+                                                onclick="focusOnIncident({{ incident.id }})" title="Show on Map">
+                                                <i class="fas fa-map-pin"></i>
+                                            </button>
+                                            <button class="btn btn-outline-info"
+                                                onclick="viewIncidentDetails({{ incident.id }})" title="View Details">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                            {% if incident.status == 'reported' %}
+                                            <button class="btn btn-outline-success"
+                                                onclick="approveIncident({{ incident.id }})" title="Approve">
+                                                <i class="fas fa-check"></i>
+                                            </button>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="8" class="text-center text-muted py-4">
+                                        <i class="fas fa-check-circle fa-2x mb-2"></i><br>
+                                        No active emergencies
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="text-center mt-3">
+                        <a href="{{ url_for('admin_incidents') }}" class="btn btn-outline-primary">
+                            <i class="fas fa-list"></i> View All Incidents
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pending Users & Quick Stats -->
+        <div class="col-lg-4 mb-4">
+            <!-- Pending Users -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h6 class="m-0 font-weight-bold text-warning">
+                        <i class="fas fa-user-clock"></i> Pending Verifications
+                    </h6>
+                </div>
+                <div class="card-body">
+                    {% if pending_users and pending_users|length > 0 %}
+                    <div class="list-group">
+                        {% for user in pending_users[:5] %}
+                        <div class="list-group-item list-group-item-action">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">{{ user.name }}</h6>
+                                <small>{{ user.created_at[:10] }}</small>
+                            </div>
+                            <p class="mb-1 small">{{ user.email }}</p>
+                            <small class="text-muted">{{ user.gov_id }}</small>
+                            <div class="mt-2">
+                                <button class="btn btn-sm btn-success" onclick="verifyUser({{ user.id }})">
+                                    <i class="fas fa-check"></i> Verify
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger">
+                                    <i class="fas fa-times"></i> Reject
+                                </button>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <div class="text-center mt-3">
+                        <a href="#" class="btn btn-outline-warning btn-sm">
+                            View All ({{ total_pending }})
+                        </a>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
+                        <p class="text-muted">No pending verifications</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Quick Stats -->
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="m-0 font-weight-bold text-info">
+                        <i class="fas fa-chart-pie"></i> Incident Statistics
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center mb-3">
+                        <div class="col-6">
+                            <div class="h4 text-primary" id="critical-count">0</div>
+                            <small class="text-muted">Critical</small>
+                        </div>
+                        <div class="col-6">
+                            <div class="h4 text-warning" id="high-count">0</div>
+                            <small class="text-muted">High</small>
+                        </div>
+                    </div>
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <div class="h4 text-info" id="medium-count">0</div>
+                            <small class="text-muted">Medium</small>
+                        </div>
+                        <div class="col-6">
+                            <div class="h4 text-success" id="low-count">0</div>
+                            <small class="text-muted">Low</small>
+                        </div>
+                    </div>
+                    <div class="mt-3 pt-3 border-top">
+                        <small class="text-muted">
+                            <i class="fas fa-history"></i> Updated: <span id="last-updated">Just now</span>
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Emergency Modal -->
+<div class="modal fade" id="emergencyModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-plus-circle"></i> Create Quick Emergency
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="quickEmergencyForm">
+                    <div class="mb-3">
+                        <label class="form-label">Emergency Type</label>
+                        <select class="form-select" name="emergency_type" required>
+                            <option value="">Select type</option>
+                            <option value="medical">Medical</option>
+                            <option value="fire">Fire</option>
+                            <option value="crime">Crime</option>
+                            <option value="accident">Accident</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <textarea class="form-control" name="description" rows="3"
+                            placeholder="Brief description of the emergency..."></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Location</label>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <input type="number" step="0.000001" class="form-control" name="latitude"
+                                    placeholder="Latitude" value="28.6139">
+                            </div>
+                            <div class="col-6">
+                                <input type="number" step="0.000001" class="form-control" name="longitude"
+                                    placeholder="Longitude" value="77.2090">
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            <button type="button" class="btn btn-sm btn-outline-secondary"
+                                onclick="getCurrentLocation()">
+                                <i class="fas fa-location-arrow"></i> Use Current Location
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" onclick="submitQuickEmergency()">
+                    <i class="fas fa-paper-plane"></i> Create Emergency
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+<!-- Assign Responder Modal -->
+<div class="modal fade" id="assignResponderModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-user-md"></i> Assign Responder
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="assign-responder-loading" class="text-center py-4">
+                    <div class="spinner-border text-info" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2 text-muted">Loading available responders...</p>
+                </div>
+                <div id="assign-responder-content" style="display: none;">
+                    <p class="mb-3">Select the best available responder for this incident:</p>
+                    <input type="hidden" id="assign-incident-id">
+                    <div class="list-group" id="responders-list">
+                        <!-- Responders will be loaded here -->
+                    </div>
+                </div>
+                <div id="assign-responder-empty" style="display: none;" class="text-center py-4">
+                    <i class="fas fa-times-circle fa-3x text-muted mb-3"></i>
+                    <p>No available responders found.</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-info" onclick="confirmAssignment()" id="confirm-assign-btn"
+                    disabled>
+                    Assign Selected
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block scripts %}
+<script>
+    // Map Configuration
+    let map = null;
+    let incidentMarkers = {};
+    let responderMarkers = {};
+    let showResponders = false;
+
+    // Map icons
+    // Ensure L is defined before using it
+    const incidentIcons = {};
+    const responderIcons = {};
+
+    // Initialize icons globally if Leaflet is available
+    function initIcons() {
+        if (typeof L !== 'undefined') {
+            incidentIcons.critical = L.divIcon({
+                className: 'incident-marker critical pulse-marker',
+                html: '<div class="marker-pin critical"></div><span class="marker-text">!</span>',
+                iconSize: [30, 42],
+                iconAnchor: [15, 42]
+            });
+            incidentIcons.high = L.divIcon({
+                className: 'incident-marker high',
+                html: '<div class="marker-pin high"></div><span class="marker-text">!</span>',
+                iconSize: [30, 42],
+                iconAnchor: [15, 42]
+            });
+            incidentIcons.medium = L.divIcon({
+                className: 'incident-marker medium',
+                html: '<div class="marker-pin medium"></div><span class="marker-text">!</span>',
+                iconSize: [30, 42],
+                iconAnchor: [15, 42]
+            });
+            incidentIcons.low = L.divIcon({
+                className: 'incident-marker low',
+                html: '<div class="marker-pin low"></div><span class="marker-text">!</span>',
+                iconSize: [30, 42],
+                iconAnchor: [15, 42]
+            });
+            incidentIcons.resolved = L.divIcon({
+                className: 'incident-marker resolved',
+                html: '<div class="marker-pin resolved">✓</div>',
+                iconSize: [30, 42],
+                iconAnchor: [15, 42]
+            });
+
+            responderIcons.ambulance = L.divIcon({
+                className: 'responder-marker ambulance',
+                html: '<div class="marker-pin ambulance">🚑</div>',
+                iconSize: [40, 40],
+                iconAnchor: [20, 40]
+            });
+            responderIcons.police = L.divIcon({
+                className: 'responder-marker police',
+                html: '<div class="marker-pin police">🚓</div>',
+                iconSize: [40, 40],
+                iconAnchor: [20, 40]
+            });
+            responderIcons.fire = L.divIcon({
+                className: 'responder-marker fire',
+                html: '<div class="marker-pin fire">🚒</div>',
+                iconSize: [40, 40],
+                iconAnchor: [20, 40]
+            });
+            responderIcons.multi = L.divIcon({
+                className: 'responder-marker ambulance',
+                html: '<div class="marker-pin ambulance">🚑</div>',
+                iconSize: [40, 40],
+                iconAnchor: [20, 40]
+            });
+        }
+    }
+
+    // Initialize map
+    function initMap() {
+        // Initialize icons first
+        initIcons();
+
+        // Check if map container exists
+        const mapContainer = document.getElementById('map');
+        if (!mapContainer) {
+            console.error('Map container not found!');
+            return;
+        }
+
+        if (!map) {
+            try {
+                // Default to New Delhi coordinates
+                const defaultLocation = [28.6139, 77.2090];
+
+                // Check if Leaflet is loaded
+                if (typeof L === 'undefined') {
+                    console.error('Leaflet library not loaded');
+                    mapContainer.innerHTML = '<div style="padding: 20px; color: red;"><strong>Error:</strong> Leaflet library not loaded</div>';
+                    return;
+                }
+
+                console.log('Initializing map with L:', typeof L);
+
+                // Clear any existing content
+                mapContainer.innerHTML = '';
+
+                // Create map instance with explicit options
+                map = L.map('map', {
+                    center: defaultLocation,
+                    zoom: 13,
+                    preferCanvas: true,
+                    zoomControl: true
+                });
+
+                console.log('Map instance created:', map);
+
+                // Add OpenStreetMap tiles with error handling
+                const osmTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                    maxZoom: 19,
+                    minZoom: 3
+                });
+
+                osmTileLayer.on('error', function () {
+                    console.error('Error loading OSM tiles, trying CartoDB');
+                    // Fallback to CartoDB
+                    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                        attribution: '© CartoDB',
+                        maxZoom: 19
+                    }).addTo(map);
+                });
+
+                osmTileLayer.addTo(map);
+
+                console.log('Tile layer added');
+
+                // Force map to recalculate its size
+                setTimeout(() => {
+                    if (map) {
+                        console.log('Invalidating map size...');
+                        map.invalidateSize(true);
+                        console.log('Map size:', map.getSize());
+                        console.log('Map bounds:', map.getBounds());
+                        console.log('Map zoom:', map.getZoom());
+                        console.log('Map center:', map.getCenter());
+                    }
+                }, 200);
+
+                // Load incidents and responders
+                loadMapData();
+
+                // Listen for new incidents via Socket.IO
+                if (typeof socket !== 'undefined') {
+                    socket.on('new_incident', function (data) {
+                        addIncidentToMap(data);
+                        updateStats();
+                        showNotification(`New ${data.type} emergency reported!`, 'warning');
+                    });
+
+                    // Listen for incident updates
+                    socket.on('incident_update', function (data) {
+                        updateIncidentOnMap(data);
+                        updateStats();
+                        showNotification(`Incident #${data.id} status updated to ${data.status}`, 'info');
+                    });
+                }
+
+                // Add scale control
+                L.control.scale().addTo(map);
+
+                console.log('Map initialized successfully');
+            } catch (error) {
+                console.error('Error initializing map:', error);
+                mapContainer.innerHTML = '<div style="padding: 20px; color: red;"><strong>Error:</strong> ' + error.message + '</div>';
+                showNotification('Error initializing map: ' + error.message, 'danger');
+            }
+        }
+    }
+
+    // Load map data (incidents and responders)
+    async function loadMapData() {
+        try {
+            console.log('Loading map data...');
+
+            // Check if map is initialized
+            if (!map) {
+                console.error('Map not initialized yet');
+                return;
+            }
+
+            // Load incidents
+            console.log('Fetching incidents from /api/map/incidents');
+            const incidentsResponse = await fetch('/api/map/incidents');
+            if (!incidentsResponse.ok) {
+                throw new Error(`API error: ${incidentsResponse.status} ${incidentsResponse.statusText}`);
+            }
+
+            const incidentsData = await incidentsResponse.json();
+
+            console.log('Incidents data received:', incidentsData);
+
+            if (incidentsData.success && incidentsData.incidents && incidentsData.incidents.length > 0) {
+                console.log(`Adding ${incidentsData.incidents.length} incidents to map`);
+                incidentsData.incidents.forEach(incident => {
+                    if (incident && incident.latitude !== null && incident.latitude !== undefined &&
+                        incident.longitude !== null && incident.longitude !== undefined) {
+                        console.log(`Processing incident ${incident.id} at (${incident.latitude}, ${incident.longitude})`);
+                        addIncidentToMap(incident);
+                    } else {
+                        console.warn('Skipping incident with invalid coordinates:', incident);
+                    }
+                });
+                updateSeverityCounts(incidentsData.incidents);
+                console.log('Incidents added to map');
+            } else {
+                console.warn('No incidents found in response:', incidentsData);
+            }
+
+            // Load responders if enabled
+            if (showResponders) {
+                try {
+                    const respondersResponse = await fetch('/api/map/responders');
+                    if (respondersResponse.ok) {
+                        const respondersData = await respondersResponse.json();
+
+                        if (respondersData.success && respondersData.responders) {
+                            console.log(`Adding ${respondersData.responders.length} responders to map`);
+                            respondersData.responders.forEach(responder => {
+                                if (responder && responder.latitude && responder.longitude) {
+                                    addResponderToMap(responder);
+                                }
+                            });
+                        }
+                    }
+                } catch (err) {
+                    console.error('Error loading responders:', err);
+                }
+            }
+
+            // Update last updated time
+            const lastUpdatedEl = document.getElementById('last-updated');
+            if (lastUpdatedEl) {
+                lastUpdatedEl.textContent = new Date().toLocaleTimeString();
+            }
+
+            console.log('Map data loaded successfully');
+
+        } catch (error) {
+            console.error('Error loading map data:', error);
+            showNotification('Error loading map data: ' + error.message, 'danger');
+        }
+    }
+
+    // Add incident to map
+    function addIncidentToMap(incident) {
+        try {
+            // Validate incident data
+            if (!incident || !incident.id || incident.latitude === undefined || incident.longitude === undefined) {
+                console.warn('Invalid incident data:', incident);
+                return;
+            }
+
+            // Remove existing marker if present
+            if (incidentMarkers[incident.id]) {
+                try {
+                    map.removeLayer(incidentMarkers[incident.id]);
+                } catch (e) {
+                    console.warn('Error removing old marker:', e);
+                }
+            }
+
+            const status = incident.status || 'reported';
+            const severity = incident.severity || 'medium';
+
+            // Use resolved icon for resolved/closed incidents
+            const icon = (status === 'resolved' || status === 'closed')
+                ? incidentIcons.resolved
+                : incidentIcons[severity] || incidentIcons.medium;
+
+            const marker = L.marker([incident.latitude, incident.longitude], {
+                icon: icon,
+                title: `Emergency #${incident.id}: ${incident.emergency_type}`
+            })
+                .addTo(map)
+                .bindPopup(createIncidentPopup(incident));
+
+            incidentMarkers[incident.id] = marker;
+
+            // Auto-open popup for critical incidents
+            if (severity === 'critical' && status !== 'resolved' && status !== 'closed') {
+                marker.openPopup();
+            }
+
+            console.log(`Added incident ${incident.id} to map`);
+        } catch (error) {
+            console.error('Error adding incident to map:', error, incident);
+        }
+    }
+
+    // Update incident on map
+    function updateIncidentOnMap(data) {
+        const marker = incidentMarkers[data.id];
+        if (marker) {
+            // Update icon based on new status
+            const icon = (data.status === 'resolved' || data.status === 'closed')
+                ? incidentIcons.resolved
+                : incidentIcons[data.severity] || incidentIcons.medium;
+
+            marker.setIcon(icon);
+
+            // Remove pulse animation for resolved incidents
+            if (data.status === 'resolved' || data.status === 'closed') {
+                marker.options.icon.options.className = marker.options.icon.options.className.replace(' pulse-marker', '');
+            }
+
+            // Update popup content
+            fetch(`/api/incidents/${data.id}`)
+                .then(response => response.json())
+                .then(incident => {
+                    marker.setPopupContent(createIncidentPopup(incident));
+                });
+        }
+    }
+
+    // Add responder to map
+    function addResponderToMap(responder) {
+        if (!responder.latitude || !responder.longitude || !responder.availability) {
+            // If no location or not available, don't add to map
+            return;
+        }
+
+        // Remove existing marker if present
+        if (responderMarkers[responder.id]) {
+            map.removeLayer(responderMarkers[responder.id]);
+        }
+
+        const icon = responderIcons[responder.role] || responderIcons.ambulance;
+
+        const marker = L.marker([responder.latitude, responder.longitude], {
+            icon: icon,
+            title: `${responder.name} (${responder.role})`
+        })
+            .addTo(map)
+            .bindPopup(createResponderPopup(responder));
+
+        responderMarkers[responder.id] = marker;
+    }
+
+    // Create incident popup content
+    function createIncidentPopup(incident) {
+        const statusColors = {
+            reported: 'warning',
+            approved: 'info',
+            dispatched: 'primary',
+            on_scene: 'dark',
+            resolved: 'success',
+            closed: 'secondary'
+        };
+
+        const severityColors = {
+            critical: 'danger',
+            high: 'warning',
+            medium: 'info',
+            low: 'success'
+        };
+
+        const severity = incident.severity || 'medium';
+        const status = incident.status || 'reported';
+
+        return `
+            <div class="incident-popup">
+                <h6 class="mb-2">
+                    <i class="fas fa-exclamation-triangle text-${severityColors[severity]}"></i>
+                    <strong>${(incident.emergency_type || 'Emergency').toUpperCase()}</strong>
+                </h6>
+                <div class="mb-2">
+                    <span class="badge bg-${statusColors[status]}">${status.toUpperCase()}</span>
+                    <span class="badge bg-${severityColors[severity]} ms-1">
+                        ${severity.toUpperCase()}
+                    </span>
+                </div>
+                <p class="mb-1"><small><strong>ID:</strong> #${incident.id}</small></p>
+                <p class="mb-1"><small><strong>Description:</strong> ${incident.description || 'No description provided'}</small></p>
+                <p class="mb-1"><small><i class="fas fa-user"></i> ${incident.user_name || 'Unknown'}</small></p>
+                <p class="mb-1"><small><i class="fas fa-phone"></i> ${incident.user_phone || 'N/A'}</small></p>
+                <p class="mb-1"><small><i class="fas fa-map-marker-alt"></i> ${incident.latitude?.toFixed(4)}, ${incident.longitude?.toFixed(4)}</small></p>
+                <p class="mb-2"><small><i class="fas fa-clock"></i> ${new Date(incident.created_at).toLocaleString()}</small></p>
+                <div class="d-grid gap-2">
+                    <button class="btn btn-sm btn-outline-primary" onclick="viewIncidentDetails(${incident.id})">
+                        <i class="fas fa-eye"></i> View Details
+                    </button>
+                    ${status === 'reported' ? `
+                    <button class="btn btn-sm btn-success" onclick="approveIncident(${incident.id})">
+                        <i class="fas fa-check"></i> Approve
+                    </button>
+                    ` : ''}
+                    ${status === 'approved' ? `
+                    <button class="btn btn-sm btn-info" onclick="assignResponderToIncident(${incident.id})">
+                        <i class="fas fa-user-md"></i> Assign Responder
+                    </button>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }
+
+    // Create responder popup content
+    function createResponderPopup(responder) {
+        return `
+            <div class="responder-popup">
+                <h6 class="mb-2">
+                    <i class="fas fa-${responder.role === 'ambulance' ? 'ambulance' : responder.role === 'police' ? 'shield-alt' : 'fire'}"></i>
+                    <strong>${responder.name}</strong>
+                </h6>
+                <p class="mb-1"><small><strong>Role:</strong> ${(responder.role || 'responder').toUpperCase()}</small></p>
+                <p class="mb-1"><small><i class="fas fa-envelope"></i> ${responder.email || 'N/A'}</small></p>
+                <p class="mb-1"><small><i class="fas fa-map-marker-alt"></i> ${responder.latitude?.toFixed(4)}, ${responder.longitude?.toFixed(4)}</small></p>
+                <p class="mb-2">
+                    <small>
+                        <i class="fas fa-${responder.availability ? 'check-circle text-success' : 'times-circle text-danger'}"></i>
+                        ${responder.availability ? 'Available' : 'Busy'}
+                    </small>
+                </p>
+                <div class="d-grid">
+                    <button class="btn btn-sm btn-outline-info" onclick="viewResponderDetails(${responder.id})">
+                        <i class="fas fa-info-circle"></i> Details
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    // Refresh map data
+    function refreshMap() {
+        // Clear existing markers
+        Object.values(incidentMarkers).forEach(marker => map.removeLayer(marker));
+        Object.values(responderMarkers).forEach(marker => map.removeLayer(marker));
+        incidentMarkers = {};
+        responderMarkers = {};
+
+        // Reload data
+        loadMapData();
+        showNotification('Map refreshed', 'info');
+    }
+
+    // Toggle responder visibility
+    function toggleResponders() {
+        showResponders = !showResponders;
+        const btn = document.getElementById('toggleRespondersBtn');
+
+        if (showResponders) {
+            btn.innerHTML = '<i class="fas fa-eye-slash"></i> Hide Responders';
+            btn.classList.remove('btn-outline-info');
+            btn.classList.add('btn-info');
+            // Load responders
+            fetch('/api/map/responders')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.responders) {
+                        data.responders.forEach(responder => {
+                            addResponderToMap(responder);
+                        });
+                    }
+                });
+        } else {
+            btn.innerHTML = '<i class="fas fa-ambulance"></i> Show Responders';
+            btn.classList.remove('btn-info');
+            btn.classList.add('btn-outline-info');
+            // Remove responder markers
+            Object.values(responderMarkers).forEach(marker => map.removeLayer(marker));
+            responderMarkers = {};
+        }
+    }
+
+    // Fit map to show all markers
+    function fitMapToBounds() {
+        const markers = Object.values(incidentMarkers);
+
+        if (markers.length > 0) {
+            const group = new L.featureGroup(markers);
+            map.fitBounds(group.getBounds().pad(0.1));
+        } else {
+            // If no markers, fit to default location
+            map.setView([28.6139, 77.2090], 13);
+        }
+    }
+
+    // Focus on specific incident
+    function focusOnIncident(incidentId) {
+        const marker = incidentMarkers[incidentId];
+        if (marker) {
+            map.setView(marker.getLatLng(), 16);
+            marker.openPopup();
+        } else {
+            showNotification('Incident not found on map', 'warning');
+        }
+    }
+
+    // View incident details
+    function viewIncidentDetails(incidentId) {
+        window.open(`/admin/incident/${incidentId}`, '_blank');
+    }
+
+    // View responder details
+    function viewResponderDetails(responderId) {
+        showNotification(`Opening responder #${responderId} details...`, 'info');
+        // In a real app, this would open a responder details page
+    }
+
+    // Approve incident
+    function approveIncident(incidentId) {
+        if (confirm('Approve this incident?')) {
+            fetch(`/api/incidents/${incidentId}/approve`, {
+                method: 'POST'
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        showNotification('Incident approved successfully!', 'success');
+                        // Refresh after 1 second
+                        setTimeout(() => location.reload(), 1000);
+                    } else {
+                        showNotification('Error: ' + data.error, 'danger');
+                    }
+                })
+                .catch(error => {
+                    showNotification('Error approving incident', 'danger');
+                });
+        }
+    }
+
+    // Assign responder to incident
+    function assignResponderToIncident(incidentId) {
+        // Store incident ID
+        document.getElementById('assign-incident-id').value = incidentId;
+
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('assignResponderModal'));
+        modal.show();
+
+        // Reset state
+        document.getElementById('assign-responder-loading').style.display = 'block';
+        document.getElementById('assign-responder-content').style.display = 'none';
+        document.getElementById('assign-responder-empty').style.display = 'none';
+        document.getElementById('confirm-assign-btn').disabled = true;
+
+        // Fetch responders
+        fetch('/api/map/responders')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('assign-responder-loading').style.display = 'none';
+
+                if (data.success && data.responders && data.responders.length > 0) {
+                    document.getElementById('assign-responder-content').style.display = 'block';
+                    const list = document.getElementById('responders-list');
+                    list.innerHTML = '';
+
+                    // Filter for available responders only
+                    const availableResponders = data.responders.filter(r => r.availability);
+
+                    if (availableResponders.length === 0) {
+                        document.getElementById('assign-responder-content').style.display = 'none';
+                        document.getElementById('assign-responder-empty').style.display = 'block';
+                        return;
+                    }
+
+                    availableResponders.forEach(responder => {
+                        const item = document.createElement('a');
+                        item.href = '#';
+                        item.className = 'list-group-item list-group-item-action';
+                        item.onclick = (e) => {
+                            e.preventDefault();
+                            // Select this item
+                            document.querySelectorAll('#responders-list .list-group-item').forEach(el => {
+                                el.classList.remove('active');
+                            });
+                            item.classList.add('active');
+                            document.getElementById('confirm-assign-btn').disabled = false;
+                            document.getElementById('confirm-assign-btn').dataset.responderId = responder.id;
+                        };
+
+                        item.innerHTML = `
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">
+                                    <i class="fas fa-${responder.role === 'ambulance' ? 'ambulance' : responder.role === 'police' ? 'shield-alt' : 'fire'}"></i>
+                                    ${responder.name}
+                                </h6>
+                                <small>${responder.role.toUpperCase()}</small>
+                            </div>
+                            <p class="mb-1 small">
+                                <i class="fas fa-map-marker-alt"></i> 
+                                ${responder.latitude.toFixed(4)}, ${responder.longitude.toFixed(4)}
+                            </p>
+                        `;
+                        list.appendChild(item);
+                    });
+                } else {
+                    document.getElementById('assign-responder-empty').style.display = 'block';
+                }
+            })
+            .catch(error => {
+                console.error('Error loading responders:', error);
+                document.getElementById('assign-responder-loading').style.display = 'none';
+                showNotification('Error loading responders', 'danger');
+            });
+    }
+
+    // Confirm assignment
+    function confirmAssignment() {
+        const btn = document.getElementById('confirm-assign-btn');
+        const responderId = btn.dataset.responderId;
+        const incidentId = document.getElementById('assign-incident-id').value;
+
+        if (!responderId || !incidentId) return;
+
+        // Disable button
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Assigning...';
+
+        fetch('/api/assign_responder', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                incident_id: incidentId,
+                responder_id: responderId
+            })
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification(data.message, 'success');
+                    const modalEl = document.getElementById('assignResponderModal');
+                    const modal = bootstrap.Modal.getInstance(modalEl);
+                    if (modal) modal.hide();
+
+                    // Refresh map
+                    refreshMap();
+                } else {
+                    showNotification('Error: ' + data.error, 'danger');
+                    btn.disabled = false;
+                    btn.textContent = 'Assign Selected';
+                }
+            })
+            .catch(error => {
+                console.error('Error assigning responder:', error);
+                showNotification('Network error', 'danger');
+                btn.disabled = false;
+                btn.textContent = 'Assign Selected';
+            });
+    }
+
+    // Update severity counts
+    function updateSeverityCounts(incidents) {
+        const counts = {
+            critical: 0,
+            high: 0,
+            medium: 0,
+            low: 0
+        };
+
+        incidents.forEach(incident => {
+            if (incident.severity in counts) {
+                counts[incident.severity]++;
+            }
+        });
+
+        document.getElementById('critical-count').textContent = counts.critical;
+        document.getElementById('high-count').textContent = counts.high;
+        document.getElementById('medium-count').textContent = counts.medium;
+        document.getElementById('low-count').textContent = counts.low;
+    }
+
+    // Update stats
+    function updateStats() {
+        fetch('/api/admin/stats')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('active-incidents-count').textContent = data.active_incidents;
+                    document.getElementById('total-incidents-count').textContent = data.total_incidents;
+                    document.getElementById('verified-users-count').textContent = data.total_users;
+                    document.getElementById('available-responders-count').textContent = data.available_responders;
+                }
+            });
+    }
+
+    // Verify user
+    function verifyUser(userId) {
+        if (confirm('Are you sure you want to verify this user?')) {
+            fetch(`/admin/verify_user/${userId}`)
+                .then(response => {
+                    if (response.ok) {
+                        showNotification('User verified successfully!', 'success');
+                        setTimeout(() => location.reload(), 1000);
+                    } else {
+                        showNotification('Error verifying user', 'danger');
+                    }
+                })
+                .catch(error => {
+                    showNotification('Error verifying user', 'danger');
+                });
+        }
+    }
+
+    // Show emergency modal
+    function showEmergencyModal() {
+        const modal = new bootstrap.Modal(document.getElementById('emergencyModal'));
+        modal.show();
+    }
+
+    // Get current location
+    function getCurrentLocation() {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    document.querySelector('input[name="latitude"]').value = lat.toFixed(6);
+                    document.querySelector('input[name="longitude"]').value = lng.toFixed(6);
+                    showNotification('Location captured successfully!', 'success');
+                },
+                (error) => {
+                    showNotification('Unable to get location. Please enter manually.', 'warning');
+                }
+            );
+        }
+    }
+
+    // Submit quick emergency
+    function submitQuickEmergency() {
+        const form = document.getElementById('quickEmergencyForm');
+        const formData = new FormData(form);
+
+        fetch('/api/quick_emergency', {
+            method: 'POST',
+            body: JSON.stringify(Object.fromEntries(formData)),
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('Emergency created successfully!', 'success');
+                    bootstrap.Modal.getInstance(document.getElementById('emergencyModal')).hide();
+                    // Refresh page after 2 seconds
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    showNotification('Error: ' + data.error, 'danger');
+                }
+            })
+            .catch(error => {
+                showNotification('Network error. Please try again.', 'danger');
+            });
+    }
+
+    // Refresh data
+    function refreshData() {
+        showNotification('Refreshing data...', 'info');
+        location.reload();
+    }
+
+    // Show notification
+    function showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+        notification.style.cssText = `
+            top: 70px;
+            right: 20px;
+            z-index: 9999;
+            min-width: 300px;
+            max-width: 400px;
+        `;
+        notification.innerHTML = `
+            <strong>${type.charAt(0).toUpperCase() + type.slice(1)}!</strong> ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+
+        document.body.appendChild(notification);
+
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.remove();
+            }
+        }, 5000);
+    }
+
+    // Initialize on page load
+    function setupMap() {
+        console.log('=== MAP INITIALIZATION START ===');
+        const mapContainer = document.getElementById('map');
+
+        if (!mapContainer) {
+            console.error('Map container not found!');
+            return;
+        }
+
+        if (typeof L === 'undefined') {
+            console.error('Leaflet is not loaded!');
+            mapContainer.innerHTML = '<div class="alert alert-danger m-3"><strong>Error:</strong> Leaflet library not loaded. Please check your internet connection.</div>';
+            return;
+        }
+
+        try {
+            console.log('Initializing map instance...');
+            initMap();
+
+            // Auto-refresh map every 30 seconds
+            setInterval(() => {
+                if (map) {
+                    refreshMap();
+                }
+            }, 30000);
+
+            // Auto-refresh stats every 60 seconds
+            setInterval(() => {
+                updateStats();
+            }, 60000);
+
+            console.log('Map initialization complete');
+        } catch (e) {
+            console.error('Error in setupMap:', e);
+            mapContainer.innerHTML = `<div class="alert alert-danger m-3"><strong>Error:</strong> Map initialization failed: ${e.message}</div>`;
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', setupMap);
+    } else {
+        setupMap();
+    }
+</script>
+{% endblock %}

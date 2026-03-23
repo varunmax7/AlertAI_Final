@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#dc3545">
+    <title>{% block title %}Emergency Response System{% endblock %}</title>
+    
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Leaflet CSS for maps -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    
+    <style>
+        :root {
+            --primary-color: #dc3545;
+            --secondary-color: #6c757d;
+            --success-color: #28a745;
+            --warning-color: #ffc107;
+            --danger-color: #dc3545;
+            --info-color: #17a2b8;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+            padding-top: 56px;
+        }
+        
+        .navbar-brand {
+            font-weight: bold;
+            color: var(--primary-color) !important;
+        }
+        
+        .sidebar {
+            position: fixed;
+            top: 56px;
+            bottom: 0;
+            left: 0;
+            z-index: 100;
+            padding: 20px 0;
+            overflow-x: hidden;
+            overflow-y: auto;
+            border-right: 1px solid #dee2e6;
+            background-color: #fff;
+        }
+        
+        .sidebar-sticky {
+            position: relative;
+            top: 0;
+            height: calc(100vh - 56px);
+            padding-top: .5rem;
+            overflow-x: hidden;
+            overflow-y: auto;
+        }
+        
+        .main-content {
+            margin-left: 220px;
+            padding: 20px;
+            transition: margin-left 0.3s;
+        }
+        
+        @media (max-width: 768px) {
+            .sidebar {
+                margin-left: -220px;
+            }
+            .main-content {
+                margin-left: 0;
+            }
+            .sidebar.active {
+                margin-left: 0;
+            }
+            .main-content.active {
+                margin-left: 220px;
+            }
+        }
+        
+        .card {
+            border: none;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            border-radius: 10px;
+            transition: transform 0.3s;
+        }
+        
+        .card:hover {
+            transform: translateY(-2px);
+        }
+        
+        .stat-card {
+            border-left: 4px solid;
+            padding-left: 15px;
+        }
+        
+        .stat-critical { border-left-color: #dc3545; }
+        .stat-high { border-left-color: #fd7e14; }
+        .stat-medium { border-left-color: #ffc107; }
+        .stat-low { border-left-color: #28a745; }
+        
+        .badge-status {
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+        
+        .status-reported { background-color: #ffc107; color: #000; }
+        .status-approved { background-color: #17a2b8; color: #fff; }
+        .status-dispatched { background-color: #007bff; color: #fff; }
+        .status-onscene { background-color: #6f42c1; color: #fff; }
+        .status-resolved { background-color: #28a745; color: #fff; }
+        
+        .severity-critical { color: #dc3545; font-weight: bold; }
+        .severity-high { color: #fd7e14; font-weight: bold; }
+        .severity-medium { color: #ffc107; font-weight: bold; }
+        .severity-low { color: #28a745; font-weight: bold; }
+        
+        #map {
+            height: 400px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .emergency-btn {
+            background: linear-gradient(45deg, #ff416c, #ff4b2b);
+            border: none;
+            color: white;
+            font-weight: bold;
+            padding: 12px 24px;
+            border-radius: 50px;
+            box-shadow: 0 4px 15px rgba(255, 65, 108, 0.4);
+            transition: all 0.3s ease;
+        }
+        
+        .emergency-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 65, 108, 0.6);
+        }
+        
+        .table-responsive {
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        .notification-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #dc3545;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+    </style>
+    
+    {% block styles %}{% endblock %}
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-white fixed-top shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('index') }}">
+                <i class="fas fa-shield-alt"></i> Emergency Response
+            </a>
+            
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    {% if session.user_type == 'admin' %}
+                        <li class="nav-item">
+                            <span class="nav-link text-success">
+                                <i class="fas fa-user-shield"></i> Admin Panel
+                            </span>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('admin_dashboard') }}">
+                                <i class="fas fa-tachometer-alt"></i> Dashboard
+                            </a>
+                        </li>
+                    {% elif session.user_type == 'responder' %}
+                        <li class="nav-item">
+                            <span class="nav-link text-info">
+                                <i class="fas fa-ambulance"></i> Responder
+                            </span>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="#">
+                                <i class="fas fa-tasks"></i> My Assignments
+                            </a>
+                        </li>
+                    {% elif session.user_type == 'citizen' %}
+                        <!-- Citizen-specific navigation -->
+                        <li class="nav-item">
+                            <span class="nav-link text-primary">
+                                <i class="fas fa-user"></i> Citizen
+                            </span>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('citizen_dashboard') }}">
+                                <i class="fas fa-tachometer-alt"></i> Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('report_emergency') }}">
+                                <i class="fas fa-exclamation-triangle"></i> Report Emergency
+                            </a>
+                        </li>
+                        <!-- Leaderboard link for citizens -->
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('leaderboard') }}">
+                                <i class="fas fa-trophy"></i> Leaderboard
+                            </a>
+                        </li>
+                    {% endif %}
+                    
+                    <!-- Leaderboard link for all logged-in users (except responders based on your design) -->
+                    {% if session.user_type in ['admin', 'citizen'] %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('leaderboard') }}">
+                            <i class="fas fa-trophy"></i> Leaderboard
+                        </a>
+                    </li>
+                    {% endif %}
+                    
+                    {% if session.user_id %}
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+                                <i class="fas fa-user-circle"></i> {{ session.username }}
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a class="dropdown-item" href="#">
+                                    <i class="fas fa-user"></i> Profile
+                                </a></li>
+                                <li><a class="dropdown-item" href="#">
+                                    <i class="fas fa-cog"></i> Settings
+                                </a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item text-danger" href="{{ url_for('logout') }}">
+                                    <i class="fas fa-sign-out-alt"></i> Logout
+                                </a></li>
+                            </ul>
+                        </li>
+                    {% else %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('login') }}">
+                                <i class="fas fa-sign-in-alt"></i> Login
+                            </a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Sidebar (for admin) -->
+    {% if session.user_type == 'admin' %}
+    <div class="sidebar" style="width: 220px;">
+        <div class="sidebar-sticky">
+            <ul class="nav flex-column">
+                <li class="nav-item">
+                    <a class="nav-link active" href="{{ url_for('admin_dashboard') }}">
+                        <i class="fas fa-tachometer-alt"></i> Dashboard
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('admin_incidents') }}">
+                        <i class="fas fa-exclamation-triangle"></i> Incidents
+                        {% if active_incidents_count and active_incidents_count > 0 %}
+                        <span class="badge bg-danger float-end">{{ active_incidents_count }}</span>
+                        {% endif %}
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#">
+                        <i class="fas fa-users"></i> Users
+                        {% if pending_users_count and pending_users_count > 0 %}
+                        <span class="badge bg-warning float-end">{{ pending_users_count }}</span>
+                        {% endif %}
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('admin_responders') }}">
+                        <i class="fas fa-ambulance"></i> Responders
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#">
+                        <i class="fas fa-map-marker-alt"></i> Live Map
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#">
+                        <i class="fas fa-chart-bar"></i> Analytics
+                    </a>
+                </li>
+                <!-- Leaderboard link in admin sidebar -->
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('leaderboard') }}">
+                        <i class="fas fa-trophy"></i> Leaderboard
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="#">
+                        <i class="fas fa-cog"></i> Settings
+                    </a>
+                </li>
+            </ul>
+            
+            <div class="mt-4 px-3">
+                <div class="card bg-light">
+                    <div class="card-body">
+                        <h6 class="card-title">System Status</h6>
+                        <div class="d-flex justify-content-between">
+                            <small>Operational</small>
+                            <span class="badge bg-success">✓</span>
+                        </div>
+                        <div class="d-flex justify-content-between mt-2">
+                            <small>Response Time</small>
+                            <small class="text-muted">5m</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Main Content -->
+    <div class="main-content {% if session.user_type == 'admin' %}admin-content{% endif %}">
+        <!-- Flash Messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+        
+        <!-- Page Content -->
+        {% block content %}{% endblock %}
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Socket.IO -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <!-- Custom JS -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    
+    <script>
+        // Toggle sidebar on mobile
+        function toggleSidebar() {
+            document.querySelector('.sidebar').classList.toggle('active');
+            document.querySelector('.main-content').classList.toggle('active');
+        }
+        
+        // Initialize Socket.IO
+        const socket = io();
+        
+        // Socket.IO event handlers
+        socket.on('connect', function() {
+            console.log('Connected to server');
+        });
+        
+        socket.on('new_incident', function(data) {
+            // Show notification
+            showNotification('New emergency reported: ' + data.type, 'warning');
+            
+            // Update incident count if on admin dashboard
+            const incidentCount = document.getElementById('incident-count');
+            if (incidentCount) {
+                const currentCount = parseInt(incidentCount.textContent);
+                incidentCount.textContent = currentCount + 1;
+            }
+            
+            // Update active incidents count
+            const activeCount = document.getElementById('active-incidents-count');
+            if (activeCount) {
+                const currentActive = parseInt(activeCount.textContent);
+                activeCount.textContent = currentActive + 1;
+            }
+        });
+        
+        socket.on('incident_update', function(data) {
+            showNotification('Incident status updated: ' + data.status, 'info');
+        });
+        
+        function showNotification(message, type = 'info') {
+            // Create notification element
+            const notification = document.createElement('div');
+            notification.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+            notification.style.cssText = `
+                top: 70px;
+                right: 20px;
+                z-index: 9999;
+                min-width: 300px;
+                max-width: 400px;
+            `;
+            notification.innerHTML = `
+                <strong>${type.charAt(0).toUpperCase() + type.slice(1)}!</strong> ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.remove();
+                }
+            }, 5000);
+        }
+        
+        // Auto-refresh data every 30 seconds
+        setInterval(() => {
+            if (window.location.pathname.includes('admin')) {
+                fetch('/api/admin/stats')
+                    .then(response => response.json())
+                    .then(data => {
+                        // Update stats if elements exist
+                        if (data.total_incidents) {
+                            const elem = document.getElementById('total-incidents');
+                            if (elem) elem.textContent = data.total_incidents;
+                        }
+                        if (data.active_incidents) {
+                            const elem = document.getElementById('active-incidents');
+                            if (elem) elem.textContent = data.active_incidents;
+                        }
+                    });
+            }
+        }, 30000);
+    </script>
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html>

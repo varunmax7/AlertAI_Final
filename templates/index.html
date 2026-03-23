@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-10">
+            <div class="jumbotron bg-light p-5 rounded text-center">
+                <h1 class="display-4 text-danger">
+                    <i class="fas fa-shield-alt"></i> Emergency Response System
+                </h1>
+                <p class="lead">AI-powered emergency response and incident management system.</p>
+                <hr class="my-4">
+                <p>Get help when you need it most. Report emergencies, assist others, save lives.</p>
+                
+                <div class="row mt-5">
+                    <div class="col-md-4 mb-4">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <i class="fas fa-user fa-3x text-primary mb-3"></i>
+                                <h4 class="card-title">For Citizens</h4>
+                                <p class="card-text">Report emergencies, get help fast, assist others in need.</p>
+                                <a href="{{ url_for('citizen_register') }}" class="btn btn-outline-primary">Register</a>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4 mb-4">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <i class="fas fa-ambulance fa-3x text-danger mb-3"></i>
+                                <h4 class="card-title">For Responders</h4>
+                                <p class="card-text">Professional responders can handle emergencies efficiently.</p>
+                                <a href="{{ url_for('login') }}" class="btn btn-outline-danger">Login</a>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4 mb-4">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <i class="fas fa-user-shield fa-3x text-success mb-3"></i>
+                                <h4 class="card-title">For Admins</h4>
+                                <p class="card-text">Manage incidents, assign responders, monitor system.</p>
+                                <a href="{{ url_for('login') }}" class="btn btn-outline-success">Login</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-5">
+                    <h3>Ready to get started?</h3>
+                    <div class="d-grid gap-2 d-md-block mt-3">
+                        <a href="{{ url_for('login') }}" class="btn btn-primary btn-lg me-2">
+                            <i class="fas fa-sign-in-alt"></i> Login
+                        </a>
+                        <a href="{{ url_for('citizen_register') }}" class="btn btn-success btn-lg">
+                            <i class="fas fa-user-plus"></i> Register as Citizen
+                        </a>
+                    </div>
+                </div>
+                
+                <div class="mt-5 text-muted">
+                    <h5>Demo Credentials:</h5>
+                    <div class="row justify-content-center">
+                        <div class="col-md-8">
+                            <table class="table table-sm">
+                                <tr>
+                                    <td><strong>Admin:</strong></td>
+                                    <td>admin / admin123</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Responder (Ambulance):</strong></td>
+                                    <td>ambulance1@test.com / test123</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Responder (Police):</strong></td>
+                                    <td>police1@test.com / test123</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Responder (Fire):</strong></td>
+                                    <td>fire1@test.com / test123</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

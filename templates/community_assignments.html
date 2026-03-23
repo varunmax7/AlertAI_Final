@@ -1,0 +1,893 @@
+{% extends "base.html" %}
+
+{% block title %}My Help Requests - Emergency Response{% endblock %}
+
+{% block styles %}
+<style>
+    .assignment-card {
+        border-left: 4px solid;
+        transition: all 0.3s ease;
+        margin-bottom: 15px;
+    }
+    
+    .assignment-requested {
+        border-left-color: #6c757d;
+        background: #f8f9fa;
+    }
+    
+    .assignment-accepted {
+        border-left-color: #ffc107;
+        background: #fff8e6;
+    }
+    
+    .assignment-arrived {
+        border-left-color: #0d6efd;
+        background: #e7f1ff;
+    }
+    
+    .assignment-completed {
+        border-left-color: #28a745;
+        background: #e6ffe6;
+    }
+    
+    .assignment-declined {
+        border-left-color: #dc3545;
+        background: #ffe6e6;
+        opacity: 0.7;
+    }
+    
+    .assignment-badge {
+        font-size: 0.8rem;
+        padding: 4px 8px;
+        border-radius: 12px;
+    }
+    
+    .emergency-icon-large {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        margin-right: 15px;
+    }
+    
+    .emergency-medical { background: #ffe6e6; color: #dc3545; }
+    .emergency-fire { background: #fff3e6; color: #fd7e14; }
+    .emergency-crime { background: #e6f2ff; color: #0d6efd; }
+    .emergency-accident { background: #fff8e6; color: #ffc107; }
+    .emergency-other { background: #e6ffe6; color: #28a745; }
+    
+    .distance-indicator {
+        display: inline-flex;
+        align-items: center;
+        background: #e9ecef;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.875rem;
+    }
+    
+    .action-buttons {
+        display: flex;
+        gap: 10px;
+        margin-top: 10px;
+    }
+    
+    .navigation-btn {
+        background: linear-gradient(135deg, #0d6efd, #0b5ed7);
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        text-decoration: none;
+    }
+    
+    .navigation-btn:hover {
+        color: white;
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(13, 110, 253, 0.3);
+    }
+    
+    .points-earned {
+        display: inline-flex;
+        align-items: center;
+        background: linear-gradient(135deg, #28a745, #1e7e34);
+        color: white;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-weight: bold;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">
+                <i class="fas fa-hands-helping"></i> My Help Requests
+            </h1>
+            <p class="text-muted">Help others in need and earn recognition</p>
+        </div>
+        <div>
+            <a href="{{ url_for('citizen_dashboard') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Stats Summary -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body text-center">
+                    <div class="h2 text-primary" id="total-helps">0</div>
+                    <small class="text-muted">Total Helps</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body text-center">
+                    <div class="h2 text-success" id="total-points">0</div>
+                    <small class="text-muted">Points Earned</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body text-center">
+                    <div class="h2 text-warning" id="current-requests">0</div>
+                    <small class="text-muted">Active Requests</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body text-center">
+                    <div class="h2 text-info" id="leaderboard-rank">-</div>
+                    <small class="text-muted">Leaderboard Rank</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <ul class="nav nav-tabs mb-4" id="assignmentsTab" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="active-tab" data-bs-toggle="tab" data-bs-target="#active" type="button">
+                <i class="fas fa-clock"></i> Active Requests
+                <span class="badge bg-warning" id="active-count">0</span>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="pending-tab" data-bs-toggle="tab" data-bs-target="#pending" type="button">
+                <i class="fas fa-hourglass-half"></i> Pending
+                <span class="badge bg-secondary" id="pending-count">0</span>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="completed-tab" data-bs-toggle="tab" data-bs-target="#completed" type="button">
+                <i class="fas fa-check-circle"></i> Completed
+                <span class="badge bg-success" id="completed-count">0</span>
+            </button>
+        </li>
+    </ul>
+
+    <!-- Tab Content -->
+    <div class="tab-content" id="assignmentsTabContent">
+        <!-- Active Assignments -->
+        <div class="tab-pane fade show active" id="active" role="tabpanel">
+            <div id="active-assignments">
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="text-muted mt-3">Loading active help requests...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pending Assignments -->
+        <div class="tab-pane fade" id="pending" role="tabpanel">
+            <div id="pending-assignments">
+                <div class="text-center py-5">
+                    <div class="spinner-border text-secondary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="text-muted mt-3">Loading pending requests...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Completed Assignments -->
+        <div class="tab-pane fade" id="completed" role="tabpanel">
+            <div id="completed-assignments">
+                <div class="text-center py-5">
+                    <div class="spinner-border text-success" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="text-muted mt-3">Loading completed helps...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Live Map -->
+    <div class="card mt-4">
+        <div class="card-header">
+            <h6 class="mb-0">
+                <i class="fas fa-map-marked-alt"></i> Active Emergency Locations
+            </h6>
+        </div>
+        <div class="card-body">
+            <div id="communityMap" style="height: 400px; width: 100%;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Assignment Details Modal -->
+<div class="modal fade" id="assignmentModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-info-circle"></i> Help Request Details
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="assignmentDetails">
+                <!-- Details loaded via JavaScript -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Global variables
+    let communityMap = null;
+    let activeAssignments = [];
+    let pendingAssignments = [];
+    let completedAssignments = [];
+    
+    // Initialize page
+    document.addEventListener('DOMContentLoaded', function() {
+        // Load user stats
+        loadUserStats();
+        
+        // Load assignments
+        loadAssignments();
+        
+        // Initialize map
+        initCommunityMap();
+        
+        // Listen for real-time updates
+        socket.on('help_request', handleNewHelpRequest);
+        socket.on('assignment_update', handleAssignmentUpdate);
+        socket.on('assignment_completed', handleAssignmentCompleted);
+        
+        // Auto-refresh every 30 seconds
+        setInterval(loadAssignments, 30000);
+    });
+    
+    // Load user statistics
+    function loadUserStats() {
+        fetch('/api/user/stats')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('total-helps').textContent = data.help_count || 0;
+                    document.getElementById('total-points').textContent = data.points || 0;
+                    if (data.leaderboard && data.leaderboard.rank) {
+                        document.getElementById('leaderboard-rank').textContent = `#${data.leaderboard.rank}`;
+                    }
+                }
+            });
+    }
+    
+    // Load all assignments
+    function loadAssignments() {
+        fetch('/api/community/assignments')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.assignments) {
+                    // Separate assignments by status
+                    activeAssignments = data.assignments.filter(a => 
+                        ['accepted', 'arrived'].includes(a.status)
+                    );
+                    pendingAssignments = data.assignments.filter(a => 
+                        a.status === 'requested'
+                    );
+                    completedAssignments = data.assignments.filter(a => 
+                        a.status === 'completed'
+                    );
+                    
+                    // Update counts
+                    document.getElementById('active-count').textContent = activeAssignments.length;
+                    document.getElementById('pending-count').textContent = pendingAssignments.length;
+                    document.getElementById('completed-count').textContent = completedAssignments.length;
+                    document.getElementById('current-requests').textContent = activeAssignments.length;
+                    
+                    // Update UI
+                    renderAssignments('active', activeAssignments);
+                    renderAssignments('pending', pendingAssignments);
+                    renderAssignments('completed', completedAssignments);
+                    
+                    // Update map
+                    updateCommunityMap();
+                }
+            })
+            .catch(error => {
+                console.error('Error loading assignments:', error);
+            });
+    }
+    
+    // Render assignments for a specific status
+    function renderAssignments(type, assignments) {
+        const container = document.getElementById(`${type}-assignments`);
+        
+        if (assignments.length === 0) {
+            let message = '';
+            let icon = '';
+            let color = '';
+            
+            switch(type) {
+                case 'active':
+                    message = 'No active help requests';
+                    icon = 'fas fa-check-circle';
+                    color = 'success';
+                    break;
+                case 'pending':
+                    message = 'No pending help requests';
+                    icon = 'fas fa-inbox';
+                    color = 'secondary';
+                    break;
+                case 'completed':
+                    message = 'No completed helps yet';
+                    icon = 'fas fa-trophy';
+                    color = 'warning';
+                    break;
+            }
+            
+            container.innerHTML = `
+                <div class="text-center py-5">
+                    <i class="${icon} fa-3x text-${color} mb-3"></i>
+                    <h5 class="text-muted">${message}</h5>
+                    ${type === 'pending' ? `
+                    <p class="text-muted">When help is needed nearby, requests will appear here</p>
+                    ` : ''}
+                </div>
+            `;
+            return;
+        }
+        
+        let html = '';
+        assignments.forEach(assignment => {
+            const emergencyClass = `emergency-${assignment.emergency_type || 'other'}`;
+            const statusClass = `assignment-${assignment.status}`;
+            
+            html += `
+                <div class="card assignment-card ${statusClass}">
+                    <div class="card-body">
+                        <div class="d-flex align-items-start">
+                            <div class="emergency-icon-large ${emergencyClass} flex-shrink-0">
+                                <i class="fas fa-${getEmergencyIcon(assignment.emergency_type)}"></i>
+                            </div>
+                            <div class="flex-grow-1">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <h5 class="mb-1">${assignment.emergency_type ? assignment.emergency_type.charAt(0).toUpperCase() + assignment.emergency_type.slice(1) : 'Emergency'} Help Request</h5>
+                                        <p class="text-muted mb-2">
+                                            <i class="fas fa-user"></i> Reported by: ${assignment.reporter_name || 'Unknown'}
+                                        </p>
+                                        ${assignment.description ? `
+                                        <p class="mb-2">${assignment.description}</p>
+                                        ` : ''}
+                                    </div>
+                                    <div class="text-end">
+                                        <span class="badge assignment-badge bg-${getSeverityColor(assignment.severity)}">
+                                            ${assignment.severity || 'medium'}
+                                        </span>
+                                        <br>
+                                        <small class="text-muted mt-1">#${assignment.incident_id}</small>
+                                    </div>
+                                </div>
+                                
+                                <div class="row mt-3">
+                                    <div class="col-md-6">
+                                        <p class="mb-1">
+                                            <i class="fas fa-map-marker-alt"></i>
+                                            ${assignment.latitude?.toFixed(4)}, ${assignment.longitude?.toFixed(4)}
+                                        </p>
+                                        <p class="mb-1">
+                                            <i class="fas fa-clock"></i>
+                                            ${new Date(assignment.requested_at).toLocaleString()}
+                                        </p>
+                                    </div>
+                                    <div class="col-md-6 text-end">
+                                        ${renderAssignmentActions(assignment)}
+                                    </div>
+                                </div>
+                                
+                                ${assignment.status === 'completed' ? `
+                                <div class="mt-3">
+                                    <span class="points-earned">
+                                        <i class="fas fa-star"></i> 20 points earned
+                                    </span>
+                                </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        container.innerHTML = html;
+    }
+    
+    // Get emergency icon
+    function getEmergencyIcon(emergencyType) {
+        const icons = {
+            medical: 'heartbeat',
+            fire: 'fire',
+            crime: 'shield-alt',
+            accident: 'car-crash',
+            other: 'exclamation'
+        };
+        return icons[emergencyType] || 'exclamation';
+    }
+    
+    // Get severity color
+    function getSeverityColor(severity) {
+        const colors = {
+            critical: 'danger',
+            high: 'warning',
+            medium: 'info',
+            low: 'success'
+        };
+        return colors[severity] || 'secondary';
+    }
+    
+    // Render action buttons based on assignment status
+    function renderAssignmentActions(assignment) {
+        let actions = '';
+        
+        switch(assignment.status) {
+            case 'requested':
+                actions = `
+                    <div class="action-buttons justify-content-end">
+                        <button class="btn btn-success btn-sm" onclick="acceptAssignment(${assignment.id})">
+                            <i class="fas fa-check"></i> Accept
+                        </button>
+                        <button class="btn btn-outline-danger btn-sm" onclick="declineAssignment(${assignment.id})">
+                            <i class="fas fa-times"></i> Decline
+                        </button>
+                        <button class="btn btn-outline-info btn-sm" onclick="viewAssignmentDetails(${assignment.id})">
+                            <i class="fas fa-info-circle"></i> Details
+                        </button>
+                    </div>
+                `;
+                break;
+                
+            case 'accepted':
+                actions = `
+                    <div class="action-buttons justify-content-end">
+                        <a href="https://www.google.com/maps/dir/?api=1&destination=${assignment.latitude},${assignment.longitude}&travelmode=driving" 
+                           target="_blank" class="navigation-btn">
+                            <i class="fas fa-directions"></i> Navigate
+                        </a>
+                        <button class="btn btn-primary btn-sm" onclick="markArrived(${assignment.id})">
+                            <i class="fas fa-map-marker-alt"></i> Arrived
+                        </button>
+                        <button class="btn btn-outline-info btn-sm" onclick="viewAssignmentDetails(${assignment.id})">
+                            <i class="fas fa-info-circle"></i> Details
+                        </button>
+                    </div>
+                `;
+                break;
+                
+            case 'arrived':
+                actions = `
+                    <div class="action-buttons justify-content-end">
+                        <button class="btn btn-success btn-sm" onclick="completeAssignment(${assignment.id})">
+                            <i class="fas fa-check-circle"></i> Complete
+                        </button>
+                        <button class="btn btn-outline-info btn-sm" onclick="viewAssignmentDetails(${assignment.id})">
+                            <i class="fas fa-info-circle"></i> Details
+                        </button>
+                    </div>
+                `;
+                break;
+                
+            case 'completed':
+                actions = `
+                    <div class="text-end">
+                        <button class="btn btn-outline-info btn-sm" onclick="viewAssignmentDetails(${assignment.id})">
+                            <i class="fas fa-info-circle"></i> View Details
+                        </button>
+                    </div>
+                `;
+                break;
+                
+            case 'declined':
+                actions = `
+                    <div class="text-end">
+                        <span class="badge bg-danger">Declined</span>
+                    </div>
+                `;
+                break;
+        }
+        
+        return actions;
+    }
+    
+    // Initialize community map
+    function initCommunityMap() {
+        if (!communityMap) {
+            // Try to get user's location
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const userLocation = [position.coords.latitude, position.coords.longitude];
+                    communityMap = L.map('communityMap').setView(userLocation, 13);
+                    
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '© OpenStreetMap contributors'
+                    }).addTo(communityMap);
+                    
+                    // Add user marker
+                    L.marker(userLocation, {
+                        icon: L.divIcon({
+                            className: 'user-marker',
+                            html: '<div class="user-marker"><i class="fas fa-user"></i></div>',
+                            iconSize: [40, 40],
+                            iconAnchor: [20, 40]
+                        })
+                    }).addTo(communityMap)
+                    .bindPopup('<strong>Your Location</strong>');
+                    
+                    updateCommunityMap();
+                },
+                (error) => {
+                    // Use default location
+                    const defaultLocation = [28.6139, 77.2090];
+                    communityMap = L.map('communityMap').setView(defaultLocation, 13);
+                    
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '© OpenStreetMap contributors'
+                    }).addTo(communityMap);
+                    
+                    updateCommunityMap();
+                }
+            );
+        }
+    }
+    
+    // Update community map with assignments
+    function updateCommunityMap() {
+        if (!communityMap) return;
+        
+        // Clear existing markers (except user marker)
+        communityMap.eachLayer(layer => {
+            if (layer instanceof L.Marker && !layer.options.icon?.options?.className?.includes('user-marker')) {
+                communityMap.removeLayer(layer);
+            }
+        });
+        
+        // Add incident markers for active and pending assignments
+        const assignmentsToShow = [...activeAssignments, ...pendingAssignments];
+        assignmentsToShow.forEach(assignment => {
+            const icon = L.divIcon({
+                className: `incident-marker ${assignment.severity}`,
+                html: `<div class="marker-pin ${assignment.severity}"></div><span class="marker-text">!</span>`,
+                iconSize: [30, 42],
+                iconAnchor: [15, 42]
+            });
+            
+            const marker = L.marker([assignment.latitude, assignment.longitude], { icon: icon })
+                .addTo(communityMap)
+                .bindPopup(`
+                    <strong>${assignment.emergency_type.toUpperCase()} Emergency</strong><br>
+                    Status: ${assignment.status}<br>
+                    Severity: ${assignment.severity}<br>
+                    <button class="btn btn-sm btn-primary mt-2" onclick="viewAssignmentDetails(${assignment.id})">
+                        View Details
+                    </button>
+                `);
+            
+            // Pulse animation for active assignments
+            if (assignment.status === 'accepted') {
+                marker.options.icon.options.className += ' pulse-marker';
+                marker.setIcon(marker.options.icon);
+            }
+        });
+    }
+    
+    // Assignment actions
+    function acceptAssignment(assignmentId) {
+        if (confirm('Accept this help request? You will be directed to the location.')) {
+            fetch(`/api/community_assignment/${assignmentId}/accept`, {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('Help request accepted! Opening navigation...', 'success');
+                    loadAssignments();
+                    loadUserStats();
+                    
+                    // Open navigation if location provided
+                    if (data.location) {
+                        window.open(`https://www.google.com/maps/dir/?api=1&destination=${data.location.lat},${data.location.lng}&travelmode=driving`, '_blank');
+                    }
+                } else {
+                    showNotification('Error: ' + data.message, 'danger');
+                }
+            });
+        }
+    }
+    
+    function declineAssignment(assignmentId) {
+        if (confirm('Decline this help request?')) {
+            fetch(`/api/community_assignment/${assignmentId}/decline`, {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('Help request declined', 'info');
+                    loadAssignments();
+                } else {
+                    showNotification('Error: ' + data.message, 'danger');
+                }
+            });
+        }
+    }
+    
+    function markArrived(assignmentId) {
+        if (confirm('Mark yourself as arrived at the emergency location?')) {
+            fetch(`/api/community_assignment/${assignmentId}/arrived`, {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('Marked as arrived at scene', 'success');
+                    loadAssignments();
+                } else {
+                    showNotification('Error: ' + data.message, 'danger');
+                }
+            });
+        }
+    }
+    
+    function completeAssignment(assignmentId) {
+        if (confirm('Mark this help request as completed?')) {
+            fetch(`/api/community/assignment/${assignmentId}/complete`, {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification(`Assignment completed! You earned ${data.points_earned} points.`, 'success');
+                    loadAssignments();
+                    loadUserStats();
+                } else {
+                    showNotification('Error: ' + data.message, 'danger');
+                }
+            });
+        }
+    }
+    
+    function viewAssignmentDetails(assignmentId) {
+        fetch(`/api/community/assignment/${assignmentId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    renderAssignmentModal(data.assignment);
+                    const modal = new bootstrap.Modal(document.getElementById('assignmentModal'));
+                    modal.show();
+                }
+            });
+    }
+    
+    function renderAssignmentModal(assignment) {
+        const container = document.getElementById('assignmentDetails');
+        const emergencyType = assignment.emergency_type || 'other';
+        const severity = assignment.severity || 'medium';
+        
+        container.innerHTML = `
+            <div class="row">
+                <div class="col-md-8">
+                    <h4>${emergencyType.charAt(0).toUpperCase() + emergencyType.slice(1)} Emergency</h4>
+                    <p class="text-muted">Incident #${assignment.incident_id}</p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <span class="badge bg-${getSeverityColor(severity)} fs-6">
+                        ${severity.toUpperCase()}
+                    </span>
+                    <br>
+                    <span class="badge bg-${assignment.status === 'completed' ? 'success' : assignment.status === 'arrived' ? 'primary' : assignment.status === 'accepted' ? 'warning' : 'secondary'} mt-2">
+                        ${assignment.status.toUpperCase()}
+                    </span>
+                </div>
+            </div>
+            
+            <hr>
+            
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>Reporter Information</h6>
+                    <table class="table table-sm">
+                        <tr>
+                            <th>Name:</th>
+                            <td>${assignment.reporter_name || 'Unknown'}</td>
+                        </tr>
+                        <tr>
+                            <th>Contact:</th>
+                            <td>${assignment.reporter_phone || 'N/A'}</td>
+                        </tr>
+                        <tr>
+                            <th>Location:</th>
+                            <td>
+                                ${assignment.latitude?.toFixed(6)}, ${assignment.longitude?.toFixed(6)}
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <h6>Assignment Details</h6>
+                    <table class="table table-sm">
+                        <tr>
+                            <th>Requested:</th>
+                            <td>${new Date(assignment.requested_at).toLocaleString()}</td>
+                        </tr>
+                        ${assignment.accepted_at ? `
+                        <tr>
+                            <th>Accepted:</th>
+                            <td>${new Date(assignment.accepted_at).toLocaleString()}</td>
+                        </tr>
+                        ` : ''}
+                        ${assignment.arrived_at ? `
+                        <tr>
+                            <th>Arrived:</th>
+                            <td>${new Date(assignment.arrived_at).toLocaleString()}</td>
+                        </tr>
+                        ` : ''}
+                        ${assignment.completed_at ? `
+                        <tr>
+                            <th>Completed:</th>
+                            <td>${new Date(assignment.completed_at).toLocaleString()}</td>
+                        </tr>
+                        ` : ''}
+                    </table>
+                </div>
+            </div>
+            
+            ${assignment.description ? `
+            <div class="mt-3">
+                <h6>Description</h6>
+                <div class="alert alert-light">
+                    ${assignment.description}
+                </div>
+            </div>
+            ` : ''}
+            
+            ${assignment.notes ? `
+            <div class="mt-3">
+                <h6>Instructions from Admin</h6>
+                <div class="alert alert-info">
+                    ${assignment.notes}
+                </div>
+            </div>
+            ` : ''}
+            
+            ${assignment.other_helpers && assignment.other_helpers.length > 0 ? `
+            <div class="mt-3">
+                <h6>Other Helpers Assigned</h6>
+                <div class="list-group">
+                    ${assignment.other_helpers.map(helper => `
+                        <div class="list-group-item">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <strong>${helper.helper_name}</strong>
+                                </div>
+                                <span class="badge bg-${helper.status === 'arrived' ? 'success' : 'warning'}">
+                                    ${helper.status}
+                                </span>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+            ` : ''}
+            
+            <div class="modal-footer mt-4">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                ${assignment.status === 'requested' ? `
+                <button type="button" class="btn btn-success" onclick="acceptAssignment(${assignment.id}); bootstrap.Modal.getInstance(document.getElementById('assignmentModal')).hide();">
+                    <i class="fas fa-check"></i> Accept Request
+                </button>
+                ` : assignment.status === 'accepted' ? `
+                <a href="https://www.google.com/maps/dir/?api=1&destination=${assignment.latitude},${assignment.longitude}&travelmode=driving" 
+                   target="_blank" class="btn btn-primary">
+                    <i class="fas fa-directions"></i> Open Navigation
+                </a>
+                <button type="button" class="btn btn-info" onclick="markArrived(${assignment.id}); bootstrap.Modal.getInstance(document.getElementById('assignmentModal')).hide();">
+                    <i class="fas fa-map-marker-alt"></i> Mark Arrived
+                </button>
+                ` : assignment.status === 'arrived' ? `
+                <button type="button" class="btn btn-success" onclick="completeAssignment(${assignment.id}); bootstrap.Modal.getInstance(document.getElementById('assignmentModal')).hide();">
+                    <i class="fas fa-check-circle"></i> Complete
+                </button>
+                ` : ''}
+            </div>
+        `;
+    }
+    
+    // Socket.IO event handlers
+    function handleNewHelpRequest(data) {
+        if (data.user_id === {{ user.id }}) {
+            showNotification('New help request nearby!', 'warning');
+            loadAssignments();
+            
+            // Play notification sound
+            playNotificationSound();
+        }
+    }
+    
+    function handleAssignmentUpdate(data) {
+        if (data.user_id === {{ user.id }}) {
+            showNotification(`Assignment status updated: ${data.status}`, 'info');
+            loadAssignments();
+        }
+    }
+    
+    function handleAssignmentCompleted(data) {
+        if (data.user_id === {{ user.id }}) {
+            showNotification(`Assignment completed! You earned ${data.points_earned} points.`, 'success');
+            loadAssignments();
+            loadUserStats();
+        }
+    }
+    
+    function playNotificationSound() {
+        try {
+            const audio = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-correct-answer-tone-2870.mp3');
+            audio.volume = 0.3;
+            audio.play();
+        } catch (e) {
+            console.log('Audio playback failed:', e);
+        }
+    }
+    
+    function showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+        notification.style.cssText = `
+            top: 70px;
+            right: 20px;
+            z-index: 9999;
+            min-width: 300px;
+            max-width: 400px;
+        `;
+        notification.innerHTML = `
+            <strong>${type.charAt(0).toUpperCase() + type.slice(1)}!</strong> ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.remove();
+            }
+        }, 5000);
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,571 @@
+{% extends "base.html" %}
+
+{% block title %}Leaderboard - Emergency Response{% endblock %}
+
+{% block styles %}
+<style>
+    .rank-badge {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 1.2rem;
+        margin: 0 auto;
+    }
+    
+    .rank-1 {
+        background: linear-gradient(135deg, #FFD700, #FFA500);
+        color: #000;
+        box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+    }
+    
+    .rank-2 {
+        background: linear-gradient(135deg, #C0C0C0, #A0A0A0);
+        color: #fff;
+        box-shadow: 0 0 15px rgba(192, 192, 192, 0.5);
+    }
+    
+    .rank-3 {
+        background: linear-gradient(135deg, #CD7F32, #A0522D);
+        color: #fff;
+        box-shadow: 0 0 15px rgba(205, 127, 50, 0.5);
+    }
+    
+    .rank-4, .rank-5, .rank-6, .rank-7, .rank-8, .rank-9, .rank-10 {
+        background: #e9ecef;
+        color: #495057;
+    }
+    
+    .user-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        margin-right: 10px;
+    }
+    
+    .citizen-avatar {
+        background: linear-gradient(135deg, #0d6efd, #0b5ed7);
+        color: white;
+    }
+    
+    .responder-avatar {
+        background: linear-gradient(135deg, #dc3545, #c82333);
+        color: white;
+    }
+    
+    .points-display {
+        display: inline-flex;
+        align-items: center;
+        background: linear-gradient(135deg, #28a745, #1e7e34);
+        color: white;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-weight: bold;
+    }
+    
+    .badge-earned {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        margin-right: 5px;
+        margin-bottom: 5px;
+    }
+    
+    .badge-hero {
+        background: linear-gradient(135deg, #FFD700, #FFA500);
+        color: #000;
+    }
+    
+    .badge-expert {
+        background: linear-gradient(135deg, #6f42c1, #5a32a3);
+        color: white;
+    }
+    
+    .badge-helper {
+        background: linear-gradient(135deg, #28a745, #1e7e34);
+        color: white;
+    }
+    
+    .badge-veteran {
+        background: linear-gradient(135deg, #fd7e14, #e8590c);
+        color: white;
+    }
+    
+    .badge-elite {
+        background: linear-gradient(135deg, #17a2b8, #138496);
+        color: white;
+    }
+    
+    .progress-thin {
+        height: 6px;
+        border-radius: 3px;
+    }
+    
+    .user-row-highlight {
+        background: rgba(13, 110, 253, 0.1);
+        border-left: 4px solid #0d6efd;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">
+                <i class="fas fa-trophy"></i> Emergency Response Leaderboard
+            </h1>
+            <p class="text-muted">Recognizing our community heroes and professional responders</p>
+        </div>
+        <div>
+            <a href="{{ url_for('citizen_dashboard') if session.user_type == 'citizen' else url_for('admin_dashboard') }}" 
+               class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Current User Stats -->
+    {% if session.user_type == 'citizen' and user %}
+    <div class="card mb-4 border-primary">
+        <div class="card-body">
+            <div class="row align-items-center">
+                <div class="col-md-3 text-center">
+                    <div class="h2 text-primary mb-0">
+                        {% if user_position and user_position.rank %}
+                        #{{ user_position.rank }}
+                        {% else %}
+                        -
+                        {% endif %}
+                    </div>
+                    <small class="text-muted">Your Rank</small>
+                </div>
+                <div class="col-md-9">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="user-avatar citizen-avatar">
+                            {{ user.name[0]|upper }}
+                        </div>
+                        <div>
+                            <h5 class="mb-0">{{ user.name }}</h5>
+                            <p class="text-muted mb-0">Community Helper</p>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-4 text-center">
+                            <div class="h5 text-primary">{{ user.help_count or 0 }}</div>
+                            <small class="text-muted">Helps Provided</small>
+                        </div>
+                        <div class="col-4 text-center">
+                            <div class="h5 text-success">{{ user.points or 0 }}</div>
+                            <small class="text-muted">Total Points</small>
+                        </div>
+                        <div class="col-4 text-center">
+                            <div class="h5 text-warning">
+                                {% if user_position and user_position.rank %}
+                                    {% if user_position.rank <= 10 %}
+                                    Top 10
+                                    {% elif user_position.rank <= 50 %}
+                                    Top 50
+                                    {% elif user_position.rank <= 100 %}
+                                    Top 100
+                                    {% else %}
+                                    Top 500
+                                    {% endif %}
+                                {% else %}
+                                -
+                                {% endif %}
+                            </div>
+                            <small class="text-muted">Percentile</small>
+                        </div>
+                    </div>
+                    <div class="progress progress-thin mt-2">
+                        <div class="progress-bar bg-success" role="progressbar" 
+                             style="width: {% if user_position and user_position.rank and user_position.rank <= 100 %}90{% elif user_position and user_position.rank and user_position.rank <= 500 %}60{% else %}30{% endif %}%;">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Tabs -->
+    <ul class="nav nav-tabs mb-4" id="leaderboardTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="citizen-tab" data-bs-toggle="tab" data-bs-target="#citizen" type="button">
+                <i class="fas fa-users"></i> Community Helpers
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="responder-tab" data-bs-toggle="tab" data-bs-target="#responder" type="button">
+                <i class="fas fa-ambulance"></i> Professional Responders
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="badges-tab" data-bs-toggle="tab" data-bs-target="#badges" type="button">
+                <i class="fas fa-award"></i> Badges & Achievements
+            </button>
+        </li>
+    </ul>
+
+    <!-- Tab Content -->
+    <div class="tab-content" id="leaderboardContent">
+        <!-- Citizen Leaderboard -->
+        <div class="tab-pane fade show active" id="citizen" role="tabpanel">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-users text-primary"></i> Top Community Helpers
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th width="80">Rank</th>
+                                    <th>Helper</th>
+                                    <th>Helps</th>
+                                    <th>Points</th>
+                                    <th>Badges</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for citizen in citizen_leaderboard %}
+                                <tr {% if citizen.id == user.id %}class="user-row-highlight"{% endif %}>
+                                    <td>
+                                        <div class="rank-badge rank-{{ citizen.rank }}">
+                                            {% if citizen.rank == 1 %}
+                                            <i class="fas fa-crown"></i>
+                                            {% elif citizen.rank == 2 %}
+                                            <i class="fas fa-medal"></i>
+                                            {% elif citizen.rank == 3 %}
+                                            <i class="fas fa-medal"></i>
+                                            {% else %}
+                                            {{ citizen.rank }}
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="user-avatar citizen-avatar">
+                                                {{ citizen.name[0]|upper }}
+                                            </div>
+                                            <div>
+                                                <strong>{{ citizen.name }}</strong>
+                                                {% if citizen.id == user.id %}
+                                                <span class="badge bg-info ms-2">You</span>
+                                                {% endif %}
+                                                <br>
+                                                <small class="text-muted">{{ citizen.email }}</small>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="h5 mb-0">{{ citizen.help_count }}</div>
+                                        <small class="text-muted">emergencies helped</small>
+                                    </td>
+                                    <td>
+                                        <div class="points-display">
+                                            {{ citizen.points }}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        {% if citizen.help_count >= 10 %}
+                                        <span class="badge-earned badge-hero" title="Hero Helper - 10+ helps">
+                                            <i class="fas fa-star"></i> Hero
+                                        </span>
+                                        {% endif %}
+                                        {% if citizen.help_count >= 5 %}
+                                        <span class="badge-earned badge-expert" title="Expert Helper - 5+ helps">
+                                            <i class="fas fa-award"></i> Expert
+                                        </span>
+                                        {% endif %}
+                                        {% if citizen.help_count >= 1 %}
+                                        <span class="badge-earned badge-helper" title="Helper - 1+ helps">
+                                            <i class="fas fa-hands-helping"></i> Helper
+                                        </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small class="text-success">
+                                            <i class="fas fa-check-circle"></i> Active
+                                        </small>
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="6" class="text-center py-5">
+                                        <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                                        <p class="text-muted">No community helpers yet</p>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Responder Leaderboard -->
+        <div class="tab-pane fade" id="responder" role="tabpanel">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-ambulance text-danger"></i> Top Professional Responders
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th width="80">Rank</th>
+                                    <th>Responder</th>
+                                    <th>Role</th>
+                                    <th>Incidents</th>
+                                    <th>Score</th>
+                                    <th>Badges</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for responder in responder_leaderboard %}
+                                <tr>
+                                    <td>
+                                        <div class="rank-badge rank-{{ responder.rank }}">
+                                            {% if responder.rank == 1 %}
+                                            <i class="fas fa-crown"></i>
+                                            {% elif responder.rank == 2 %}
+                                            <i class="fas fa-medal"></i>
+                                            {% elif responder.rank == 3 %}
+                                            <i class="fas fa-medal"></i>
+                                            {% else %}
+                                            {{ responder.rank }}
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="user-avatar responder-avatar">
+                                                {{ responder.name[0]|upper }}
+                                            </div>
+                                            <div>
+                                                <strong>{{ responder.name }}</strong>
+                                                <br>
+                                                <small class="text-muted">{{ responder.email }}</small>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{% if responder.role == 'ambulance' %}danger{% elif responder.role == 'police' %}primary{% else %}warning{% endif %}">
+                                            {{ responder.role|title }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="h5 mb-0">{{ responder.incidents_handled }}</div>
+                                        <small class="text-muted">handled</small>
+                                    </td>
+                                    <td>
+                                        <div class="points-display">
+                                            {{ responder.response_score }}
+                                        </div>
+                                    </td>
+                                    <td>
+                                        {% if responder.response_score >= 100 %}
+                                        <span class="badge-earned badge-elite" title="Elite Responder - 100+ score">
+                                            <i class="fas fa-shield-alt"></i> Elite
+                                        </span>
+                                        {% endif %}
+                                        {% if responder.incidents_handled >= 50 %}
+                                        <span class="badge-earned badge-veteran" title="Veteran - 50+ incidents">
+                                            <i class="fas fa-star"></i> Veteran
+                                        </span>
+                                        {% endif %}
+                                        {% if responder.incidents_handled >= 10 %}
+                                        <span class="badge-earned badge-expert" title="Expert - 10+ incidents">
+                                            <i class="fas fa-award"></i> Expert
+                                        </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if responder.availability %}
+                                        <small class="text-success">
+                                            <i class="fas fa-check-circle"></i> Available
+                                        </small>
+                                        {% else %}
+                                        <small class="text-warning">
+                                            <i class="fas fa-clock"></i> Busy
+                                        </small>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="7" class="text-center py-5">
+                                        <i class="fas fa-ambulance fa-3x text-muted mb-3"></i>
+                                        <p class="text-muted">No responder data available</p>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Badges & Achievements -->
+        <div class="tab-pane fade" id="badges" role="tabpanel">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-award text-warning"></i> Badges & Achievements
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <!-- Citizen Badges -->
+                        <div class="col-md-6">
+                            <h5 class="mb-4">
+                                <i class="fas fa-users text-primary"></i> Community Helper Badges
+                            </h5>
+                            <div class="row">
+                                <div class="col-6 mb-4">
+                                    <div class="card text-center">
+                                        <div class="card-body">
+                                            <div class="badge-earned badge-helper" style="font-size: 2rem; padding: 20px;">
+                                                <i class="fas fa-hands-helping"></i>
+                                            </div>
+                                            <h6 class="mt-3">Helper</h6>
+                                            <p class="small text-muted">Complete 1 help request</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-6 mb-4">
+                                    <div class="card text-center">
+                                        <div class="card-body">
+                                            <div class="badge-earned badge-expert" style="font-size: 2rem; padding: 20px;">
+                                                <i class="fas fa-award"></i>
+                                            </div>
+                                            <h6 class="mt-3">Expert Helper</h6>
+                                            <p class="small text-muted">Complete 5+ help requests</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-6 mb-4">
+                                    <div class="card text-center">
+                                        <div class="card-body">
+                                            <div class="badge-earned badge-hero" style="font-size: 2rem; padding: 20px;">
+                                                <i class="fas fa-star"></i>
+                                            </div>
+                                            <h6 class="mt-3">Hero Helper</h6>
+                                            <p class="small text-muted">Complete 10+ help requests</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-6 mb-4">
+                                    <div class="card text-center">
+                                        <div class="card-body">
+                                            <div class="badge-earned" style="background: linear-gradient(135deg, #6f42c1, #5a32a3); color: white; font-size: 2rem; padding: 20px;">
+                                                <i class="fas fa-bolt"></i>
+                                            </div>
+                                            <h6 class="mt-3">First Responder</h6>
+                                            <p class="small text-muted">Be first to accept a critical emergency</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Responder Badges -->
+                        <div class="col-md-6">
+                            <h5 class="mb-4">
+                                <i class="fas fa-ambulance text-danger"></i> Professional Responder Badges
+                            </h5>
+                            <div class="row">
+                                <div class="col-6 mb-4">
+                                    <div class="card text-center">
+                                        <div class="card-body">
+                                            <div class="badge-earned badge-expert" style="font-size: 2rem; padding: 20px;">
+                                                <i class="fas fa-award"></i>
+                                            </div>
+                                            <h6 class="mt-3">Expert Responder</h6>
+                                            <p class="small text-muted">Handle 10+ incidents</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-6 mb-4">
+                                    <div class="card text-center">
+                                        <div class="card-body">
+                                            <div class="badge-earned badge-veteran" style="font-size: 2rem; padding: 20px;">
+                                                <i class="fas fa-star"></i>
+                                            </div>
+                                            <h6 class="mt-3">Veteran Responder</h6>
+                                            <p class="small text-muted">Handle 50+ incidents</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-6 mb-4">
+                                    <div class="card text-center">
+                                        <div class="card-body">
+                                            <div class="badge-earned badge-elite" style="font-size: 2rem; padding: 20px;">
+                                                <i class="fas fa-shield-alt"></i>
+                                            </div>
+                                            <h6 class="mt-3">Elite Responder</h6>
+                                            <p class="small text-muted">Achieve 100+ response score</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-6 mb-4">
+                                    <div class="card text-center">
+                                        <div class="card-body">
+                                            <div class="badge-earned" style="background: linear-gradient(135deg, #28a745, #1e7e34); color: white; font-size: 2rem; padding: 20px;">
+                                                <i class="fas fa-clock"></i>
+                                            </div>
+                                            <h6 class="mt-3">Rapid Response</h6>
+                                            <p class="small text-muted">Respond within 5 minutes consistently</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info mt-4">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Badge System:</strong> Badges are automatically awarded based on your contributions. 
+                        Top performers each month receive special recognition and may be eligible for certificates from partner organizations.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Auto-refresh leaderboard every 60 seconds
+    document.addEventListener('DOMContentLoaded', function() {
+        setInterval(() => {
+            // Refresh the current tab
+            const activeTab = document.querySelector('#leaderboardTabs .nav-link.active').id;
+            if (activeTab === 'citizen-tab' || activeTab === 'responder-tab') {
+                // In a real implementation, you would fetch fresh data here
+                // For now, we'll just show a subtle notification
+                console.log('Leaderboard auto-refresh triggered');
+            }
+        }, 60000);
+    });
+</script>
+{% endblock %}

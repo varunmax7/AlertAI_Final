@@ -1,0 +1,1359 @@
+{% extends "base.html" %}
+
+{% block title %}Citizen Dashboard - Emergency Response{% endblock %}
+
+{% block styles %}
+<style>
+    /* Citizen-specific styles */
+    .emergency-card {
+        background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+        color: white;
+        border: none;
+        border-radius: 15px;
+        overflow: hidden;
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    
+    .emergency-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(255, 107, 107, 0.3);
+    }
+    
+    .emergency-card .card-body {
+        padding: 30px;
+    }
+    
+    .panic-button {
+        width: 80px;
+        height: 80px;
+        border-radius: 50%;
+        background: linear-gradient(45deg, #ff416c, #ff4b2b);
+        border: none;
+        color: white;
+        font-size: 40px;
+        box-shadow: 0 10px 25px rgba(255, 65, 108, 0.4);
+        transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto;
+    }
+    
+    .panic-button:hover {
+        transform: scale(1.1);
+        box-shadow: 0 15px 30px rgba(255, 65, 108, 0.6);
+    }
+    
+    .panic-button:active {
+        transform: scale(0.95);
+    }
+    
+    .incident-timeline {
+        position: relative;
+        padding-left: 30px;
+    }
+    
+    .incident-timeline::before {
+        content: '';
+        position: absolute;
+        left: 15px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: #dee2e6;
+    }
+    
+    .timeline-item {
+        position: relative;
+        margin-bottom: 20px;
+    }
+    
+    .timeline-item::before {
+        content: '';
+        position: absolute;
+        left: -23px;
+        top: 5px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #007bff;
+        border: 2px solid white;
+        box-shadow: 0 0 0 3px #007bff;
+    }
+    
+    .timeline-item.critical::before { background: #dc3545; box-shadow: 0 0 0 3px #dc3545; }
+    .timeline-item.high::before { background: #fd7e14; box-shadow: 0 0 0 3px #fd7e14; }
+    .timeline-item.medium::before { background: #ffc107; box-shadow: 0 0 0 3px #ffc107; }
+    .timeline-item.low::before { background: #28a745; box-shadow: 0 0 0 3px #28a745; }
+    
+    .location-indicator {
+        display: inline-flex;
+        align-items: center;
+        background: #e9ecef;
+        padding: 5px 10px;
+        border-radius: 20px;
+        font-size: 0.875rem;
+    }
+    
+    .location-indicator.active {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .help-badge {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: #17a2b8;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 1.2rem;
+    }
+    
+    .profile-stats {
+        border-top: 1px solid #dee2e6;
+        padding-top: 15px;
+        margin-top: 15px;
+    }
+    
+    .quick-action-btn {
+        border-radius: 10px;
+        padding: 15px;
+        text-align: center;
+        transition: all 0.3s ease;
+        border: 2px solid transparent;
+    }
+    
+    .quick-action-btn:hover {
+        border-color: #007bff;
+        transform: translateY(-2px);
+    }
+    
+    /* Emergency type icons */
+    .emergency-icon {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        margin-right: 15px;
+    }
+    
+    .emergency-medical { background: #ffe6e6; color: #dc3545; }
+    .emergency-fire { background: #fff3e6; color: #fd7e14; }
+    .emergency-crime { background: #e6f2ff; color: #0d6efd; }
+    .emergency-accident { background: #fff8e6; color: #ffc107; }
+    .emergency-other { background: #e6ffe6; color: #28a745; }
+    
+    /* Help request notification */
+    .help-notification {
+        animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+        100% { transform: scale(1); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Welcome Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">
+                <i class="fas fa-user-shield"></i> Citizen Dashboard
+            </h1>
+            <p class="text-muted">Welcome back, {{ user.name }}! Stay safe and help others in need.</p>
+        </div>
+        <div class="d-flex align-items-center">
+            <div class="location-indicator {% if user.latitude and user.longitude %}active{% endif %}" id="locationStatus">
+                <i class="fas fa-map-marker-alt me-2"></i>
+                <span id="locationText">
+                    {% if user.latitude and user.longitude %}
+                    Location Sharing: <strong>ON</strong>
+                    {% else %}
+                    Location Sharing: <strong>OFF</strong>
+                    {% endif %}
+                </span>
+            </div>
+            <div class="help-badge ms-3" title="Helps Provided">
+                {{ user.help_count or 0 }}
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions & Emergency Button -->
+    <div class="row mb-4">
+        <!-- Emergency Button -->
+        <div class="col-lg-4 mb-4">
+            <div class="card emergency-card" onclick="showReportEmergencyModal()">
+                <div class="card-body text-center">
+                    <div class="panic-button mb-3">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <h4 class="card-title">Report Emergency</h4>
+                    <p class="card-text">Click to report an emergency or use the panic button below</p>
+                    <small><i class="fas fa-info-circle"></i> Help will arrive as quickly as possible</small>
+                </div>
+            </div>
+            
+            <!-- Quick Actions -->
+            <div class="card mt-4">
+                <div class="card-header">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-bolt"></i> Quick Actions
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <div class="quick-action-btn" onclick="toggleLocationSharing()">
+                                <i class="fas fa-map-marker-alt fa-2x text-primary mb-2"></i>
+                                <h6>Location</h6>
+                                <small class="text-muted" id="locationToggleText">
+                                    {% if user.latitude and user.longitude %}Turn Off{% else %}Turn On{% endif %}
+                                </small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="quick-action-btn" onclick="viewEmergencyHistory()">
+                                <i class="fas fa-history fa-2x text-info mb-2"></i>
+                                <h6>History</h6>
+                                <small class="text-muted">Past emergencies</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="quick-action-btn" onclick="viewLeaderboard()">
+                                <i class="fas fa-trophy fa-2x text-warning mb-2"></i>
+                                <h6>Leaderboard</h6>
+                                <small class="text-muted">Your ranking</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="quick-action-btn" onclick="viewProfile()">
+                                <i class="fas fa-user-cog fa-2x text-success mb-2"></i>
+                                <h6>Settings</h6>
+                                <small class="text-muted">Account settings</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Incidents & Stats -->
+        <div class="col-lg-8 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-exclamation-triangle"></i> Your Recent Emergencies
+                        </h6>
+                        <a href="#" class="btn btn-sm btn-outline-primary">View All</a>
+                    </div>
+                </div>
+                <div class="card-body">
+                    {% if incidents and incidents|length > 0 %}
+                    <div class="incident-timeline">
+                        {% for incident in incidents %}
+                        <div class="timeline-item {{ incident.severity }} mb-3">
+                            <div class="card">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div class="d-flex align-items-center">
+                                            <div class="emergency-icon emergency-{{ incident.emergency_type }}">
+                                                <i class="fas fa-{% if incident.emergency_type == 'medical' %}heartbeat{% elif incident.emergency_type == 'fire' %}fire{% elif incident.emergency_type == 'crime' %}shield-alt{% else %}car-crash{% endif %}"></i>
+                                            </div>
+                                            <div>
+                                                <h6 class="mb-1">{{ incident.emergency_type|title }} Emergency</h6>
+                                                <p class="mb-1 text-muted small">
+                                                    <i class="fas fa-clock"></i> {{ incident.created_at[:16] }}
+                                                    <span class="ms-2">
+                                                        <i class="fas fa-map-marker-alt"></i> 
+                                                        {{ "%.4f, %.4f"|format(incident.latitude, incident.longitude) }}
+                                                    </span>
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div class="text-end">
+                                            <span class="badge bg-{% if incident.status == 'reported' %}warning{% elif incident.status == 'approved' %}info{% elif incident.status == 'dispatched' %}primary{% elif incident.status == 'on_scene' %}dark{% else %}success{% endif %}">
+                                                {{ incident.status|title }}
+                                            </span>
+                                            <br>
+                                            <small class="text-muted">#{{ incident.id }}</small>
+                                        </div>
+                                    </div>
+                                    {% if incident.description %}
+                                    <div class="mt-2">
+                                        <small>{{ incident.description }}</small>
+                                    </div>
+                                    {% endif %}
+                                    <div class="mt-2">
+                                        {% if incident.status not in ['resolved', 'closed'] %}
+                                        <button class="btn btn-sm btn-outline-primary" onclick="trackIncident({{ incident.id }})">
+                                            <i class="fas fa-map-marker-alt"></i> Track
+                                        </button>
+                                        {% endif %}
+                                        <button class="btn btn-sm btn-outline-info" onclick="viewIncidentDetails({{ incident.id }})">
+                                            <i class="fas fa-eye"></i> Details
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                        <h5 class="text-muted">No emergencies reported yet</h5>
+                        <p class="text-muted">When you report emergencies, they will appear here</p>
+                        <button class="btn btn-primary" onclick="showReportEmergencyModal()">
+                            <i class="fas fa-plus"></i> Report First Emergency
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats & Help Opportunities -->
+    <div class="row">
+        <!-- Your Stats -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="m-0 font-weight-bold text-primary">
+                        <i class="fas fa-chart-bar"></i> Your Statistics
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-4 mb-3">
+                            <div class="h3 text-primary">{{ user.help_count or 0 }}</div>
+                            <small class="text-muted">Helps Provided</small>
+                        </div>
+                        <div class="col-4 mb-3">
+                            <div class="h3 text-success">{{ incidents|length }}</div>
+                            <small class="text-muted">Emergencies Reported</small>
+                        </div>
+                        <div class="col-4 mb-3">
+                            <div class="h3 text-warning">{{ user.points or 0 }}</div>
+                            <small class="text-muted">Points Earned</small>
+                        </div>
+                    </div>
+                    
+                    {% if leaderboard %}
+                    <div class="profile-stats">
+                        <h6 class="text-muted mb-3">Leaderboard Position</h6>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="h4 mb-0">Rank #{{ leaderboard.rank or 'N/A' }}</div>
+                                <small class="text-muted">Among all citizens</small>
+                            </div>
+                            <div class="text-end">
+                                <div class="h4 text-success mb-0">{{ leaderboard.points or 0 }}</div>
+                                <small class="text-muted">Total Points</small>
+                            </div>
+                        </div>
+                        <div class="progress mt-3" style="height: 10px;">
+                            <div class="progress-bar bg-success" role="progressbar" style="width: {% if leaderboard.rank and leaderboard.rank <= 10 %}90{% elif leaderboard.rank and leaderboard.rank <= 50 %}60{% else %}30{% endif %}%;"></div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Nearby Help Requests -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 font-weight-bold text-warning">
+                            <i class="fas fa-hands-helping"></i> Nearby Help Requests
+                        </h6>
+                        <button class="btn btn-sm btn-outline-warning" onclick="refreshHelpRequests()">
+                            <i class="fas fa-sync-alt"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="helpRequestsList">
+                        <div class="text-center py-3">
+                            <div class="spinner-border text-warning" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="text-muted mt-2">Loading nearby help requests...</p>
+                        </div>
+                    </div>
+                    <div class="text-center mt-3">
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle"></i> You'll receive notifications for help requests in your area
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Emergency Map -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-map-marked-alt"></i> Nearby Emergencies
+                        </h6>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button type="button" class="btn btn-outline-primary" onclick="refreshEmergencyMap()">
+                                <i class="fas fa-sync-alt"></i> Refresh
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="locateMe()">
+                                <i class="fas fa-location-arrow"></i> My Location
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="citizenMap" style="height: 400px; width: 100%;"></div>
+                    <div class="mt-3">
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle"></i> Shows emergencies within 5km of your location. 
+                            Red markers need immediate attention.
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Emergency Reporting Modal -->
+<div class="modal fade" id="reportEmergencyModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle"></i> Report Emergency
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <strong>Important:</strong> Only report genuine emergencies. False reports may lead to account suspension.
+                </div>
+                
+                <form id="emergencyReportForm">
+                    <!-- Step 1: Emergency Type -->
+                    <div id="step1">
+                        <h5 class="mb-3">1. What type of emergency?</h5>
+                        <div class="row g-3" id="emergencyTypes">
+                            <div class="col-md-4">
+                                <div class="card emergency-type-card" data-type="medical">
+                                    <div class="card-body text-center">
+                                        <div class="emergency-icon emergency-medical mx-auto mb-3">
+                                            <i class="fas fa-heartbeat"></i>
+                                        </div>
+                                        <h6>Medical</h6>
+                                        <small class="text-muted">Heart attack, injury, illness</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card emergency-type-card" data-type="fire">
+                                    <div class="card-body text-center">
+                                        <div class="emergency-icon emergency-fire mx-auto mb-3">
+                                            <i class="fas fa-fire"></i>
+                                        </div>
+                                        <h6>Fire</h6>
+                                        <small class="text-muted">Building fire, forest fire</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card emergency-type-card" data-type="crime">
+                                    <div class="card-body text-center">
+                                        <div class="emergency-icon emergency-crime mx-auto mb-3">
+                                            <i class="fas fa-shield-alt"></i>
+                                        </div>
+                                        <h6>Crime</h6>
+                                        <small class="text-muted">Robbery, assault, theft</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card emergency-type-card" data-type="accident">
+                                    <div class="card-body text-center">
+                                        <div class="emergency-icon emergency-accident mx-auto mb-3">
+                                            <i class="fas fa-car-crash"></i>
+                                        </div>
+                                        <h6>Accident</h6>
+                                        <small class="text-muted">Traffic, industrial, home</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="card emergency-type-card" data-type="other">
+                                    <div class="card-body text-center">
+                                        <div class="emergency-icon emergency-other mx-auto mb-3">
+                                            <i class="fas fa-exclamation"></i>
+                                        </div>
+                                        <h6>Other</h6>
+                                        <small class="text-muted">Natural disaster, missing person</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <input type="hidden" id="emergencyType" name="emergency_type">
+                    </div>
+                    
+                    <!-- Step 2: Location -->
+                    <div id="step2" style="display: none;">
+                        <h5 class="mb-3">2. Where is the emergency?</h5>
+                        <div class="mb-3">
+                            <div id="locationMap" style="height: 200px; width: 100%;" class="mb-3"></div>
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle"></i>
+                                Your current location has been captured. Drag the marker if needed.
+                            </div>
+                            <div class="row g-2">
+                                <div class="col-md-6">
+                                    <label class="form-label">Latitude</label>
+                                    <input type="number" step="0.000001" class="form-control" id="latitude" name="latitude" readonly>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Longitude</label>
+                                    <input type="number" step="0.000001" class="form-control" id="longitude" name="longitude" readonly>
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="getCurrentLocation()">
+                                    <i class="fas fa-location-arrow"></i> Refresh Location
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Step 3: Description -->
+                    <div id="step3" style="display: none;">
+                        <h5 class="mb-3">3. Describe the emergency</h5>
+                        <div class="mb-3">
+                            <label class="form-label">Description (Optional but helpful)</label>
+                            <textarea class="form-control" id="description" name="description" rows="3" 
+                                      placeholder="Please provide details about the emergency..."></textarea>
+                            <small class="text-muted">Include number of people affected, visible injuries, etc.</small>
+                        </div>
+                        
+                        <div class="alert alert-warning" id="severityAlert">
+                            <i class="fas fa-robot"></i>
+                            <strong>AI Assessment:</strong> <span id="severityText">Select emergency type first</span>
+                        </div>
+                    </div>
+                </form>
+                
+                <!-- Panic Button Section -->
+                <div class="text-center mt-4 border-top pt-4">
+                    <h6 class="text-danger mb-3">In extreme emergency?</h6>
+                    <button class="btn btn-danger btn-lg" onclick="triggerPanicButton()">
+                        <i class="fas fa-exclamation-triangle"></i> PANIC BUTTON
+                    </button>
+                    <p class="text-muted small mt-2">
+                        <i class="fas fa-info-circle"></i> Immediately notifies all nearby responders with your location
+                    </p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-outline-primary" id="prevBtn" style="display: none;" onclick="prevStep()">
+                    <i class="fas fa-arrow-left"></i> Previous
+                </button>
+                <button type="button" class="btn btn-primary" id="nextBtn" onclick="nextStep()">
+                    Next <i class="fas fa-arrow-right"></i>
+                </button>
+                <button type="button" class="btn btn-danger" id="submitBtn" style="display: none;" onclick="submitEmergency()">
+                    <i class="fas fa-paper-plane"></i> Submit Emergency
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Global variables
+    let currentStep = 1;
+    let selectedEmergencyType = '';
+    let citizenMap = null;
+    let locationMap = null;
+    let locationMarker = null;
+    let helpRequests = [];
+    
+    // Initialize citizen map
+    function initCitizenMap() {
+        if (!citizenMap) {
+            // Try to get user's location, default to New Delhi
+            let defaultLocation = [28.6139, 77.2090];
+            
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        defaultLocation = [position.coords.latitude, position.coords.longitude];
+                        citizenMap.setView(defaultLocation, 15);
+                        updateUserLocation(position.coords.latitude, position.coords.longitude);
+                    },
+                    (error) => {
+                        console.log('Using default location');
+                        citizenMap.setView(defaultLocation, 13);
+                    }
+                );
+            }
+            
+            citizenMap = L.map('citizenMap').setView(defaultLocation, 13);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(citizenMap);
+            
+            // Load nearby emergencies
+            loadNearbyEmergencies();
+            
+            // Add user location marker
+            L.marker(defaultLocation, {
+                icon: L.divIcon({
+                    className: 'user-marker',
+                    html: '<div class="marker-pin user"><i class="fas fa-user"></i></div>',
+                    iconSize: [30, 42],
+                    iconAnchor: [15, 42]
+                })
+            }).addTo(citizenMap)
+            .bindPopup('<strong>Your Location</strong>')
+            .openPopup();
+        }
+    }
+    
+    // Initialize location map for emergency reporting
+    function initLocationMap() {
+        if (!locationMap) {
+            locationMap = L.map('locationMap').setView([28.6139, 77.2090], 15);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(locationMap);
+            
+            // Get current location
+            getCurrentLocation();
+        }
+    }
+    
+    // Get current location for emergency reporting
+    function getCurrentLocation() {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    
+                    // Update form fields
+                    document.getElementById('latitude').value = lat;
+                    document.getElementById('longitude').value = lng;
+                    
+                    // Update map view
+                    if (locationMap) {
+                        locationMap.setView([lat, lng], 17);
+                        
+                        // Remove existing marker
+                        if (locationMarker) {
+                            locationMap.removeLayer(locationMarker);
+                        }
+                        
+                        // Add draggable marker
+                        locationMarker = L.marker([lat, lng], { draggable: true })
+                            .addTo(locationMap)
+                            .bindPopup('Emergency location')
+                            .openPopup();
+                        
+                        // Update coordinates when marker is dragged
+                        locationMarker.on('dragend', function(e) {
+                            const markerLatLng = locationMarker.getLatLng();
+                            document.getElementById('latitude').value = markerLatLng.lat;
+                            document.getElementById('longitude').value = markerLatLng.lng;
+                        });
+                    }
+                    
+                    // Also update citizen map if exists
+                    if (citizenMap) {
+                        citizenMap.setView([lat, lng], 15);
+                    }
+                },
+                (error) => {
+                    console.error('Error getting location:', error);
+                    showNotification('Unable to get your location. Please enable location services.', 'warning');
+                }
+            );
+        } else {
+            showNotification('Geolocation is not supported by your browser', 'warning');
+        }
+    }
+    
+    // Update user location in database
+    function updateUserLocation(lat, lng) {
+        fetch('/api/update_location', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                latitude: lat,
+                longitude: lng,
+                is_sharing: true
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('locationStatus').classList.add('active');
+                document.getElementById('locationText').innerHTML = 'Location Sharing: <strong>ON</strong>';
+                document.getElementById('locationToggleText').textContent = 'Turn Off';
+                showNotification('Location updated successfully', 'success');
+            }
+        })
+        .catch(error => {
+            console.error('Error updating location:', error);
+        });
+    }
+    
+    // Toggle location sharing
+    function toggleLocationSharing() {
+        const isActive = document.getElementById('locationStatus').classList.contains('active');
+        
+        if (isActive) {
+            // Turn off location sharing
+            fetch('/api/update_location', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    is_sharing: false
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('locationStatus').classList.remove('active');
+                    document.getElementById('locationText').innerHTML = 'Location Sharing: <strong>OFF</strong>';
+                    document.getElementById('locationToggleText').textContent = 'Turn On';
+                    showNotification('Location sharing turned off', 'info');
+                }
+            });
+        } else {
+            // Turn on location sharing
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        updateUserLocation(position.coords.latitude, position.coords.longitude);
+                    },
+                    (error) => {
+                        showNotification('Please enable location services to share your location', 'warning');
+                    }
+                );
+            } else {
+                showNotification('Geolocation is not supported by your browser', 'warning');
+            }
+        }
+    }
+    
+    // Load nearby emergencies for citizen map
+    function loadNearbyEmergencies() {
+        if (!citizenMap) return;
+        
+        const center = citizenMap.getCenter();
+        
+        fetch(`/api/nearby_incidents?lat=${center.lat}&lng=${center.lng}&radius=5`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.incidents) {
+                    // Clear existing markers (except user marker)
+                    citizenMap.eachLayer(layer => {
+                        if (layer instanceof L.Marker && !layer.options.icon?.options?.className?.includes('user-marker')) {
+                            citizenMap.removeLayer(layer);
+                        }
+                    });
+                    
+                    // Add incident markers
+                    data.incidents.forEach(incident => {
+                        if (incident.status !== 'resolved' && incident.status !== 'closed') {
+                            const icon = L.divIcon({
+                                className: `incident-marker ${incident.severity}`,
+                                html: `<div class="marker-pin ${incident.severity}"></div><span class="marker-text">!</span>`,
+                                iconSize: [30, 42],
+                                iconAnchor: [15, 42]
+                            });
+                            
+                            L.marker([incident.latitude, incident.longitude], { icon: icon })
+                                .addTo(citizenMap)
+                                .bindPopup(`
+                                    <strong>${incident.emergency_type.toUpperCase()}</strong><br>
+                                    Severity: ${incident.severity}<br>
+                                    Status: ${incident.status}<br>
+                                    <small>${incident.description || 'No description'}</small>
+                                `);
+                        }
+                    });
+                }
+            })
+            .catch(error => console.error('Error loading nearby incidents:', error));
+    }
+    
+    // Load help requests
+    function loadHelpRequests() {
+        fetch('/api/nearby_help_requests')
+            .then(response => response.json())
+            .then(data => {
+                const container = document.getElementById('helpRequestsList');
+                
+                if (data.success && data.requests && data.requests.length > 0) {
+                    let html = '';
+                    data.requests.forEach(request => {
+                        html += `
+                            <div class="card mb-2">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div>
+                                            <h6 class="mb-1">${request.emergency_type} Emergency</h6>
+                                            <p class="mb-1 small text-muted">
+                                                <i class="fas fa-map-marker-alt"></i> ${request.distance}km away
+                                            </p>
+                                            <small>${request.description || 'No description'}</small>
+                                        </div>
+                                        <div class="text-end">
+                                            <span class="badge bg-${request.severity === 'critical' ? 'danger' : request.severity === 'high' ? 'warning' : 'info'}">
+                                                ${request.severity}
+                                            </span>
+                                            <br>
+                                            <button class="btn btn-sm btn-success mt-2" onclick="acceptHelpRequest(${request.id})">
+                                                <i class="fas fa-check"></i> Accept
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = `
+                        <div class="text-center py-4">
+                            <i class="fas fa-check-circle fa-2x text-success mb-2"></i>
+                            <p class="text-muted">No nearby help requests at the moment</p>
+                            <small class="text-muted">You'll be notified when help is needed nearby</small>
+                        </div>
+                    `;
+                }
+            })
+            .catch(error => {
+                document.getElementById('helpRequestsList').innerHTML = `
+                    <div class="alert alert-danger">
+                        Error loading help requests. Please try again.
+                    </div>
+                `;
+            });
+    }
+    
+    // Emergency reporting modal functions
+    function showReportEmergencyModal() {
+        const modal = new bootstrap.Modal(document.getElementById('reportEmergencyModal'));
+        modal.show();
+        
+        // Initialize location map
+        setTimeout(() => {
+            initLocationMap();
+            
+            // Add click handlers to emergency type cards
+            document.querySelectorAll('.emergency-type-card').forEach(card => {
+                card.addEventListener('click', function() {
+                    document.querySelectorAll('.emergency-type-card').forEach(c => {
+                        c.classList.remove('border-primary');
+                    });
+                    this.classList.add('border-primary');
+                    selectedEmergencyType = this.dataset.type;
+                    document.getElementById('emergencyType').value = selectedEmergencyType;
+                    
+                    // Update AI assessment
+                    updateSeverityAssessment(selectedEmergencyType, document.getElementById('description').value);
+                });
+            });
+        }, 100);
+    }
+    
+    function nextStep() {
+        if (currentStep === 1) {
+            // Validate emergency type selection
+            if (!selectedEmergencyType) {
+                showNotification('Please select an emergency type', 'warning');
+                return;
+            }
+            
+            document.getElementById('step1').style.display = 'none';
+            document.getElementById('step2').style.display = 'block';
+            document.getElementById('prevBtn').style.display = 'inline-block';
+            currentStep = 2;
+        } else if (currentStep === 2) {
+            // Validate location
+            const lat = document.getElementById('latitude').value;
+            const lng = document.getElementById('longitude').value;
+            
+            if (!lat || !lng) {
+                showNotification('Please capture your location', 'warning');
+                return;
+            }
+            
+            document.getElementById('step2').style.display = 'none';
+            document.getElementById('step3').style.display = 'block';
+            document.getElementById('nextBtn').style.display = 'none';
+            document.getElementById('submitBtn').style.display = 'inline-block';
+            currentStep = 3;
+            
+            // Update AI assessment with description
+            updateSeverityAssessment(selectedEmergencyType, document.getElementById('description').value);
+        }
+    }
+    
+    function prevStep() {
+        if (currentStep === 2) {
+            document.getElementById('step2').style.display = 'none';
+            document.getElementById('step1').style.display = 'block';
+            document.getElementById('prevBtn').style.display = 'none';
+            currentStep = 1;
+        } else if (currentStep === 3) {
+            document.getElementById('step3').style.display = 'none';
+            document.getElementById('step2').style.display = 'block';
+            document.getElementById('nextBtn').style.display = 'inline-block';
+            document.getElementById('submitBtn').style.display = 'none';
+            currentStep = 2;
+        }
+    }
+    
+    function updateSeverityAssessment(emergencyType, description) {
+        fetch('/api/assess_severity', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                emergency_type: emergencyType,
+                description: description
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const severity = data.severity;
+                const severityText = severity.charAt(0).toUpperCase() + severity.slice(1);
+                const severityColor = severity === 'critical' ? 'danger' : 
+                                    severity === 'high' ? 'warning' : 
+                                    severity === 'medium' ? 'info' : 'success';
+                
+                document.getElementById('severityText').innerHTML = `
+                    <span class="badge bg-${severityColor}">${severityText}</span> severity based on your input
+                `;
+                
+                document.getElementById('severityAlert').className = `alert alert-${severity === 'critical' ? 'danger' : severity === 'high' ? 'warning' : 'info'}`;
+            }
+        })
+        .catch(error => {
+            console.error('Error assessing severity:', error);
+        });
+    }
+    
+    function submitEmergency() {
+        const formData = {
+            emergency_type: document.getElementById('emergencyType').value,
+            latitude: document.getElementById('latitude').value,
+            longitude: document.getElementById('longitude').value,
+            description: document.getElementById('description').value
+        };
+        
+        // Disable submit button and show loading
+        const submitBtn = document.getElementById('submitBtn');
+        const originalText = submitBtn.innerHTML;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reporting...';
+        submitBtn.disabled = true;
+        
+        fetch('/emergency/report', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(formData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('Emergency reported successfully! Help is on the way.', 'success');
+                bootstrap.Modal.getInstance(document.getElementById('reportEmergencyModal')).hide();
+                
+                // Reset form
+                resetEmergencyForm();
+                
+                // Reload page after 2 seconds to show new incident
+                setTimeout(() => location.reload(), 2000);
+            } else {
+                showNotification('Error: ' + data.error, 'danger');
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+            }
+        })
+        .catch(error => {
+            showNotification('Network error. Please try again.', 'danger');
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        });
+    }
+    
+    function triggerPanicButton() {
+        if (confirm('This will immediately notify all nearby responders with your location. Use only for life-threatening emergencies. Continue?')) {
+            // Get current location
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const panicData = {
+                            emergency_type: 'panic',
+                            latitude: position.coords.latitude,
+                            longitude: position.coords.longitude,
+                            description: 'PANIC BUTTON ACTIVATED - Immediate assistance required!'
+                        };
+                        
+                        fetch('/emergency/report', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify(panicData)
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                showNotification('Panic alert sent! All nearby responders notified.', 'success');
+                                bootstrap.Modal.getInstance(document.getElementById('reportEmergencyModal')).hide();
+                                setTimeout(() => location.reload(), 2000);
+                            }
+                        });
+                    },
+                    (error) => {
+                        showNotification('Unable to get location for panic button', 'danger');
+                    }
+                );
+            }
+        }
+    }
+    
+    function resetEmergencyForm() {
+        currentStep = 1;
+        selectedEmergencyType = '';
+        
+        document.getElementById('step1').style.display = 'block';
+        document.getElementById('step2').style.display = 'none';
+        document.getElementById('step3').style.display = 'none';
+        
+        document.getElementById('prevBtn').style.display = 'none';
+        document.getElementById('nextBtn').style.display = 'inline-block';
+        document.getElementById('submitBtn').style.display = 'none';
+        
+        document.querySelectorAll('.emergency-type-card').forEach(c => {
+            c.classList.remove('border-primary');
+        });
+        
+        document.getElementById('emergencyType').value = '';
+        document.getElementById('latitude').value = '';
+        document.getElementById('longitude').value = '';
+        document.getElementById('description').value = '';
+        document.getElementById('severityText').textContent = 'Select emergency type first';
+        document.getElementById('severityAlert').className = 'alert alert-warning';
+    }
+    
+    // Other utility functions
+    function refreshEmergencyMap() {
+        loadNearbyEmergencies();
+        showNotification('Map refreshed', 'info');
+    }
+    
+    function locateMe() {
+        if (navigator.geolocation && citizenMap) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    citizenMap.setView([position.coords.latitude, position.coords.longitude], 15);
+                    showNotification('Centered on your location', 'success');
+                },
+                (error) => {
+                    showNotification('Unable to get your location', 'warning');
+                }
+            );
+        }
+    }
+    
+    function refreshHelpRequests() {
+        loadHelpRequests();
+        showNotification('Help requests refreshed', 'info');
+    }
+    
+    function trackIncident(incidentId) {
+        showNotification(`Tracking incident #${incidentId}...`, 'info');
+        // In next step, this will open tracking page
+    }
+    
+    function viewIncidentDetails(incidentId) {
+        window.open(`/incident/${incidentId}`, '_blank');
+    }
+    
+    function acceptHelpRequest(requestId) {
+        if (confirm('Accept this help request? You will be directed to the location.')) {
+            showNotification(`Accepted help request #${requestId}`, 'success');
+            // In next step, this will start navigation
+        }
+    }
+    
+    function viewEmergencyHistory() {
+        showNotification('Opening emergency history...', 'info');
+        // Will be implemented in next step
+    }
+    
+    function viewLeaderboard() {
+        showNotification('Opening leaderboard...', 'info');
+        // Will be implemented in next step
+    }
+    
+    function viewProfile() {
+        showNotification('Opening profile settings...', 'info');
+        // Will be implemented in next step
+    }
+    
+    // Show notification
+    function showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+        notification.style.cssText = `
+            top: 70px;
+            right: 20px;
+            z-index: 9999;
+            min-width: 300px;
+            max-width: 400px;
+        `;
+        notification.innerHTML = `
+            <strong>${type.charAt(0).toUpperCase() + type.slice(1)}!</strong> ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.remove();
+            }
+        }, 5000);
+    }
+
+    // ========================================
+    // NEW FUNCTIONS FOR COMMUNITY ASSIGNMENTS
+    // ========================================
+    
+    // Listen for help requests via Socket.IO
+    socket.on('help_request', function(data) {
+        if (data.user_id === {{ user.id }}) {
+            // Show notification with accept/decline options
+            const notification = document.createElement('div');
+            notification.className = 'alert alert-warning alert-dismissible fade show position-fixed';
+            notification.style.cssText = `
+                top: 70px;
+                right: 20px;
+                z-index: 9999;
+                min-width: 400px;
+                max-width: 500px;
+            `;
+            notification.innerHTML = `
+                <h6><i class="fas fa-hands-helping"></i> Help Request Nearby!</h6>
+                <p><strong>${data.emergency_type.toUpperCase()} Emergency</strong> (${data.severity})</p>
+                <p class="small">${data.instructions || 'Please proceed to the location to provide assistance.'}</p>
+                <div class="d-grid gap-2 mt-3">
+                    <button class="btn btn-sm btn-success" onclick="acceptHelpRequestFromNotification('${data.incident_id}')">
+                        <i class="fas fa-check"></i> Accept Help Request
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger" data-bs-dismiss="alert">
+                        <i class="fas fa-times"></i> Decline
+                    </button>
+                </div>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // Also play notification sound
+            playNotificationSound();
+        }
+    });
+
+    function acceptHelpRequestFromNotification(incidentId) {
+        // In a real implementation, this would fetch the assignment ID first
+        fetch('/api/accept_help_request/' + incidentId, {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('Help request accepted! Navigate to the location.', 'success');
+                // You could open navigation here
+                if (data.location) {
+                    openNavigation(data.location.lat, data.location.lng);
+                }
+            }
+        });
+    }
+
+    function playNotificationSound() {
+        // Simple notification sound
+        try {
+            const audio = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-correct-answer-tone-2870.mp3');
+            audio.volume = 0.3;
+            audio.play();
+        } catch (e) {
+            console.log('Audio playback failed:', e);
+        }
+    }
+
+    function openNavigation(lat, lng) {
+        // Open in Google Maps or other navigation app
+        const url = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
+        window.open(url, '_blank');
+    }
+
+    // Listen for incident assignments via Socket.IO
+    socket.on('incident_assigned', function(data) {
+        if (data.user_id === {{ user.id }}) {
+            showNotification(`You've been assigned to help with a ${data.emergency_type} emergency`, 'info');
+            
+            // Update the help requests list if open
+            loadHelpRequests();
+        }
+    });
+
+    // Listen for assignment updates
+    socket.on('assignment_update', function(data) {
+        if (data.user_id === {{ user.id }}) {
+            let message = `Your help request #${data.assignment_id} status updated: ${data.status}`;
+            let type = 'info';
+            
+            if (data.status === 'accepted') {
+                message = `Your help request has been accepted by a community member!`;
+                type = 'success';
+            } else if (data.status === 'completed') {
+                message = `Help request completed! You earned ${data.points || 10} points.`;
+                type = 'success';
+            } else if (data.status === 'cancelled') {
+                message = `Help request was cancelled.`;
+                type = 'warning';
+            }
+            
+            showNotification(message, type);
+            
+            // Reload help requests and stats
+            loadHelpRequests();
+            loadUserStats();
+        }
+    });
+
+    // Load user stats (for updating points)
+    function loadUserStats() {
+        fetch('/api/user/stats')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update help count
+                    const helpBadge = document.querySelector('.help-badge');
+                    if (helpBadge && data.help_count !== undefined) {
+                        helpBadge.textContent = data.help_count;
+                    }
+                    
+                    // Update points
+                    const pointsElement = document.querySelector('.h3.text-warning');
+                    if (pointsElement && data.points !== undefined) {
+                        pointsElement.textContent = data.points;
+                    }
+                    
+                    // Update leaderboard rank if available
+                    if (data.leaderboard) {
+                        const rankElement = document.querySelector('.profile-stats .h4.mb-0');
+                        const pointsElement = document.querySelector('.profile-stats .h4.text-success');
+                        
+                        if (rankElement && data.leaderboard.rank) {
+                            rankElement.textContent = `Rank #${data.leaderboard.rank}`;
+                        }
+                        if (pointsElement && data.leaderboard.points) {
+                            pointsElement.textContent = data.leaderboard.points;
+                        }
+                    }
+                }
+            })
+            .catch(error => console.error('Error loading user stats:', error));
+    }
+
+    // Handle accepting a help request from the list
+    function acceptHelpRequest(requestId) {
+        if (confirm('Accept this help request? You will be directed to the location and earn points for helping.')) {
+            fetch('/api/accept_help_request/' + requestId, {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('Help request accepted! Opening navigation...', 'success');
+                    
+                    // Open navigation to location
+                    if (data.location) {
+                        openNavigation(data.location.lat, data.location.lng);
+                    }
+                    
+                    // Update the help requests list
+                    loadHelpRequests();
+                    
+                    // Reload user stats to update points
+                    setTimeout(loadUserStats, 1000);
+                } else {
+                    showNotification('Error: ' + data.message, 'danger');
+                }
+            })
+            .catch(error => {
+                showNotification('Network error. Please try again.', 'danger');
+            });
+        }
+    }
+    
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize maps
+        initCitizenMap();
+        
+        // Load help requests
+        loadHelpRequests();
+        
+        // Load initial user stats
+        loadUserStats();
+        
+        // Auto-refresh help requests every 30 seconds
+        setInterval(() => {
+            loadHelpRequests();
+        }, 30000);
+    });
+</script>
+{% endblock %}
